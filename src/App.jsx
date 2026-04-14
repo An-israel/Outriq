@@ -1,46 +1,38 @@
 import { useState } from 'react'
 import {
   LayoutDashboard, Package, Brain, Zap, BarChart3, CreditCard,
-  Search, Bell, Settings, ChevronRight, Activity, LogOut, Loader
+  Search, Bell, Settings, ChevronRight, Activity, LogOut, Loader, Eye, EyeOff
 } from 'lucide-react'
-import Dashboard from './pages/Dashboard'
-import Products from './pages/Products'
+import Dashboard    from './pages/Dashboard'
+import Products     from './pages/Products'
 import Intelligence from './pages/Intelligence'
 import Distribution from './pages/Distribution'
-import Analytics from './pages/Analytics'
-import Pricing from './pages/Pricing'
-import { useAuth } from './hooks/useAuth'
+import Analytics    from './pages/Analytics'
+import Pricing      from './pages/Pricing'
+import Landing      from './pages/Landing'
+import { useAuth }  from './hooks/useAuth'
 
 const NAV = [
-  { id: 'dashboard',    label: 'Dashboard',    icon: LayoutDashboard, section: 'Core' },
-  { id: 'products',     label: 'Products',      icon: Package,         section: 'Core', badge: '5' },
-  { id: 'intelligence', label: 'Intelligence',  icon: Brain,           section: 'Engine', badge: 'LIVE', live: true },
-  { id: 'distribution', label: 'Distribution',  icon: Zap,             section: 'Engine' },
-  { id: 'analytics',    label: 'Analytics',     icon: BarChart3,       section: 'Reports' },
-  { id: 'pricing',      label: 'Pricing',       icon: CreditCard,      section: 'Reports' },
+  { id: 'dashboard',    label: 'Dashboard',   icon: LayoutDashboard, section: 'Core' },
+  { id: 'products',     label: 'Products',     icon: Package,         section: 'Core', badge: '5' },
+  { id: 'intelligence', label: 'Intelligence', icon: Brain,           section: 'Engine', badge: 'LIVE', live: true },
+  { id: 'distribution', label: 'Distribution', icon: Zap,             section: 'Engine' },
+  { id: 'analytics',    label: 'Analytics',    icon: BarChart3,       section: 'Reports' },
+  { id: 'pricing',      label: 'Pricing',      icon: CreditCard,      section: 'Reports' },
 ]
 
 const PAGES = {
-  dashboard: Dashboard,
-  products: Products,
-  intelligence: Intelligence,
-  distribution: Distribution,
-  analytics: Analytics,
-  pricing: Pricing,
+  dashboard: Dashboard, products: Products, intelligence: Intelligence,
+  distribution: Distribution, analytics: Analytics, pricing: Pricing,
 }
 
 const TITLES = {
-  dashboard: 'Dashboard',
-  products: 'Products',
-  intelligence: 'Intelligence Engine',
-  distribution: 'Distribution Engine',
-  analytics: 'Analytics',
-  pricing: 'Pricing',
+  dashboard: 'Dashboard', products: 'Products', intelligence: 'Intelligence Engine',
+  distribution: 'Distribution Engine', analytics: 'Analytics', pricing: 'Pricing',
 }
 
 function Sidebar({ current, onNav, user, onLogout }) {
   const sections = [...new Set(NAV.map(n => n.section))]
-
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -62,16 +54,10 @@ function Sidebar({ current, onNav, user, onLogout }) {
             {NAV.filter(n => n.section === section).map(item => {
               const Icon = item.icon
               return (
-                <div
-                  key={item.id}
-                  className={`nav-item ${current === item.id ? 'active' : ''}`}
-                  onClick={() => onNav(item.id)}
-                >
+                <div key={item.id} className={`nav-item ${current === item.id ? 'active' : ''}`} onClick={() => onNav(item.id)}>
                   <Icon className="nav-icon" size={15} />
                   <span>{item.label}</span>
-                  {item.badge && (
-                    <span className={`nav-badge ${item.live ? 'live' : ''}`}>{item.badge}</span>
-                  )}
+                  {item.badge && <span className={`nav-badge ${item.live ? 'live' : ''}`}>{item.badge}</span>}
                 </div>
               )
             })}
@@ -92,13 +78,8 @@ function Sidebar({ current, onNav, user, onLogout }) {
             <LogOut size={13} />
           </button>
         </div>
-        <div className="system-status">
-          <div className="status-dot" />
-          <span>All systems operational</span>
-        </div>
-        <div style={{ marginTop: 7, fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-mono)', letterSpacing: '0.3px' }}>
-          v1.0.0 · April 2026
-        </div>
+        <div className="system-status"><div className="status-dot" /><span>All systems operational</span></div>
+        <div style={{ marginTop: 7, fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-mono)', letterSpacing: '0.3px' }}>v1.0.0 · April 2026</div>
       </div>
     </aside>
   )
@@ -119,25 +100,21 @@ function TopBar({ current, user }) {
       </div>
       <div className="topbar-actions">
         <button className="icon-btn" title="Activity"><Activity size={15} /></button>
-        <button className="icon-btn" title="Notifications">
-          <Bell size={15} />
-          <span className="notif-dot" />
-        </button>
+        <button className="icon-btn" title="Notifications"><Bell size={15} /><span className="notif-dot" /></button>
         <button className="icon-btn" title="Settings"><Settings size={15} /></button>
-        <div className="avatar" title={`${user?.name} · ${user?.email}`}>
-          {user?.name?.slice(0,2).toUpperCase() || 'AI'}
-        </div>
+        <div className="avatar" title={`${user?.name} · ${user?.email}`}>{user?.name?.slice(0,2).toUpperCase() || 'AI'}</div>
       </div>
     </header>
   )
 }
 
-// ── Login / Register screen ───────────────────────────────────
-function AuthScreen({ onAuth }) {
-  const [mode, setMode]         = useState('login')
+// ── Auth Screen ───────────────────────────────────────────────
+function AuthScreen({ initialMode = 'login', onAuth, onBackToLanding }) {
+  const [mode, setMode]         = useState(initialMode)
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('aniekaneazy@gmail.com')
   const [password, setPassword] = useState('outriq2026')
+  const [showPwd, setShowPwd]   = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const { login, register }     = useAuth()
@@ -164,6 +141,7 @@ function AuthScreen({ onAuth }) {
       <div style={{ position: 'fixed', bottom: '-15%', left: '5%', width: 500, height: 500, background: 'radial-gradient(ellipse, rgba(6,182,212,0.1) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
       <div style={{ background: 'rgba(255,255,255,0.035)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 24, padding: '40px 36px', width: 400, position: 'relative', zIndex: 1 }}>
+        {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
           <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg,#7c3aed,#06b6d4)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(139,92,246,0.4)' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -183,7 +161,11 @@ function AuthScreen({ onAuth }) {
           {mode === 'login' ? 'Sign in to your AI marketing dashboard' : 'Start your autonomous marketing engine'}
         </p>
 
-        {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '10px 14px', color: '#f87171', fontSize: 12.5, marginBottom: 18 }}>{error}</div>}
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '10px 14px', color: '#f87171', fontSize: 12.5, marginBottom: 18 }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {mode === 'register' && (
@@ -192,16 +174,37 @@ function AuthScreen({ onAuth }) {
               <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="Aniekan Israel" required />
             </div>
           )}
+
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '1px' }}>Email</label>
             <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
           </div>
+
           <div style={{ marginBottom: 24 }}>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '1px' }}>Password</label>
-            <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
+            <div style={{ position: 'relative' }}>
+              <input
+                className="form-input"
+                type={showPwd ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                style={{ paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(v => !v)}
+                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.35)', padding: 2, display: 'flex', alignItems: 'center' }}
+                title={showPwd ? 'Hide password' : 'Show password'}
+              >
+                {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
-          <button type="submit" className="btn btn-primary w-full" disabled={loading} style={{ fontSize: 14, padding: '12px 20px' }}>
-            {loading ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+
+          <button type="submit" className="btn btn-primary w-full" disabled={loading} style={{ fontSize: 14, padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            {loading && <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />}
             {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
@@ -213,6 +216,14 @@ function AuthScreen({ onAuth }) {
           </button>
         </div>
 
+        {onBackToLanding && (
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button onClick={onBackToLanding} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.2)', fontSize: 11.5 }}>
+              ← Back to home
+            </button>
+          </div>
+        )}
+
         <div style={{ textAlign: 'center', marginTop: 16, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, fontSize: 11, color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--font-mono)' }}>
           Demo: aniekaneazy@gmail.com / outriq2026
         </div>
@@ -221,9 +232,11 @@ function AuthScreen({ onAuth }) {
   )
 }
 
+// ── App ───────────────────────────────────────────────────────
 export default function App() {
   const { user, loading, logout } = useAuth()
   const [authed, setAuthed]       = useState(false)
+  const [screen, setScreen]       = useState('landing') // 'landing' | 'login' | 'register'
   const [current, setCurrent]     = useState('dashboard')
 
   if (loading) {
@@ -239,21 +252,36 @@ export default function App() {
     )
   }
 
-  if (!user && !authed) {
-    return <AuthScreen onAuth={() => setAuthed(true)} />
+  // Already logged in → go straight to dashboard
+  if (user || authed) {
+    const Page = PAGES[current]
+    return (
+      <div className="app-shell">
+        <Sidebar current={current} onNav={setCurrent} user={user} onLogout={() => { logout(); setAuthed(false); setScreen('landing') }} />
+        <div className="main-area">
+          <TopBar current={current} user={user} />
+          <main className="page-content">
+            <Page onNavigate={setCurrent} />
+          </main>
+        </div>
+      </div>
+    )
   }
 
-  const Page = PAGES[current]
+  if (screen === 'landing') {
+    return (
+      <Landing
+        onGetStarted={() => setScreen('register')}
+        onSignIn={() => setScreen('login')}
+      />
+    )
+  }
 
   return (
-    <div className="app-shell">
-      <Sidebar current={current} onNav={setCurrent} user={user} onLogout={() => { logout(); setAuthed(false) }} />
-      <div className="main-area">
-        <TopBar current={current} user={user} />
-        <main className="page-content">
-          <Page onNavigate={setCurrent} />
-        </main>
-      </div>
-    </div>
+    <AuthScreen
+      initialMode={screen}
+      onAuth={() => setAuthed(true)}
+      onBackToLanding={() => setScreen('landing')}
+    />
   )
 }
