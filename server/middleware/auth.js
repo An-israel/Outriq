@@ -1,5 +1,4 @@
 import jwt from 'jsonwebtoken'
-import { getOne } from '../db.js'
 
 export function verifyToken(req, res, next) {
   const header = req.headers.authorization
@@ -8,11 +7,7 @@ export function verifyToken(req, res, next) {
   }
   const token = header.slice(7)
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    // Ensure user actually exists in current DB instance (Vercel /tmp can reset)
-    const user = getOne('SELECT id, email, name, tier FROM users WHERE id = ?', [decoded.id])
-    if (!user) return res.status(401).json({ error: 'Session expired — please log in again' })
-    req.user = user
+    req.user = jwt.verify(token, process.env.JWT_SECRET)
     next()
   } catch {
     return res.status(401).json({ error: 'Invalid token' })
