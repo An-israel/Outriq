@@ -137,6 +137,41 @@ router.post('/login', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ── Change Password ───────────────────────────────────────────
+router.post('/change-password', async (req, res, next) => {
+  try {
+    const header = req.headers.authorization
+    if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' })
+    const decoded = jwt.verify(header.slice(7), process.env.JWT_SECRET)
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' })
+    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' })
+
+    const user = getOne('SELECT * FROM users WHERE id = ?', [decoded.id])
+    if (!user) return res.status(404).json({ error: 'Account not found' })
+
+    const ok = await bcrypt.compare(currentPassword, user.password)
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' })
+
+    const hash = await bcrypt.hash(newPassword, 10)
+    run('UPDATE users SET password = ? WHERE id = ?', [hash, user.id])
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
+// ── Update Profile ────────────────────────────────────────────
+router.patch('/profile', async (req, res, next) => {
+  try {
+    const header = req.headers.authorization
+    if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' })
+    const decoded = jwt.verify(header.slice(7), process.env.JWT_SECRET)
+    const { name } = req.body
+    if (!name?.trim()) return res.status(400).json({ error: 'Name required' })
+    run('UPDATE users SET name = ? WHERE id = ?', [name.trim(), decoded.id])
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
 // ── Me ────────────────────────────────────────────────────────
 router.get('/me', (req, res, next) => {
   try {

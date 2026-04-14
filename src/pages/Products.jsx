@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { Plus, Search, MapPin, Globe, Tag, Users, Check, CheckCircle, X, ChevronRight, Zap, Brain } from 'lucide-react'
 import { useProducts } from '../hooks/useProducts'
 
-const CATEGORIES = ['Food & Beverage', 'Health & Fitness', 'Education & Tech', 'Legal Services', 'Real Estate', 'E-commerce', 'Business Services', 'Other']
+const CATEGORIES = [
+  'SaaS / Software', 'Fintech', 'Agritech', 'Crypto & DeFi', 'E-commerce',
+  'Education & EdTech', 'Health & Fitness', 'Food & Beverage', 'Legal Services',
+  'Real Estate', 'Logistics & Delivery', 'Media & Entertainment', 'Fashion & Beauty',
+  'Travel & Hospitality', 'Business Services', 'Marketing & Advertising',
+  'HR & Recruitment', 'Insurance', 'Energy & Utilities', 'Non-profit / NGO', 'Other',
+]
 const LOCATIONS  = ['Lagos, Nigeria', 'Abuja, Nigeria', 'Port Harcourt, Nigeria', 'Ibadan, Nigeria', 'Nigeria (Remote/Nationwide)', 'Other']
 
 function PIPTag({ text }) {
@@ -218,24 +224,6 @@ function AddProductModal({ onClose, onCreate }) {
                 <option value="">Select location...</option>
                 {LOCATIONS.map(l => <option key={l}>{l}</option>)}
               </select>
-            </div>
-
-            <div style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 14, padding: 16, marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--violet-300)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Brain size={13} /> What OUTRIQ generates from your input
-              </div>
-              {[
-                'Product Intelligence Profile (PIP) — full JSON with value props, pain points, search terms',
-                'Vector embedding for semantic matching across all platforms',
-                'Initial batch of 10–20 SEO articles targeting your keywords',
-                'Dedicated landing page deployed to your subdomain',
-                'Active monitoring across 8 platforms for intent signals',
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
-                  <CheckCircle size={11} style={{ color: 'var(--green-400)', marginTop: 2, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{item}</span>
-                </div>
-              ))}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>

@@ -194,8 +194,7 @@ export default function Dashboard({ onNavigate }) {
 
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Platform Health</span>
-            <span style={{ fontSize: 11, color: 'var(--violet-400)', cursor: 'pointer', fontWeight: 600 }} onClick={() => onNavigate('distribution')}>Manage →</span>
+            <span className="card-title">Platform Coverage</span>
           </div>
           <ChannelStatusGrid platforms={platforms.length ? platforms : []} />
         </div>
@@ -205,7 +204,7 @@ export default function Dashboard({ onNavigate }) {
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="card-header">
             <span className="card-title">Recent Actions</span>
-            <span style={{ fontSize: 11, color: 'var(--violet-400)', cursor: 'pointer', fontWeight: 600 }} onClick={() => onNavigate('distribution')}>View All →</span>
+            <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{actions.length} total</span>
           </div>
           <table className="data-table">
             <thead>
