@@ -10,8 +10,6 @@ const DB_PATH   = IS_VERCEL ? '/tmp/outriq.db' : join(__dirname, 'outriq.db')
 
 const db = new Database(DB_PATH)
 if (!IS_VERCEL) db.pragma('journal_mode = WAL')
-// FK constraints are only meaningful with a persistent DB — Vercel /tmp resets on every cold start
-if (!IS_VERCEL) db.pragma('foreign_keys = ON')
 
 // ── Schema ────────────────────────────────────────────────────
 db.exec(`
@@ -53,8 +51,7 @@ db.exec(`
     leads_count     INTEGER DEFAULT 0,
     impressions     INTEGER DEFAULT 0,
     clicks          INTEGER DEFAULT 0,
-    created_at      TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    created_at      TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS signals (
@@ -69,8 +66,7 @@ db.exec(`
     url            TEXT,
     acted_upon     INTEGER DEFAULT 0,
     action_id      TEXT,
-    created_at     TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    created_at     TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS actions (
@@ -85,8 +81,7 @@ db.exec(`
     status            TEXT DEFAULT 'processing',
     clicks            INTEGER DEFAULT 0,
     impressions       INTEGER DEFAULT 0,
-    created_at        TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    created_at        TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS platform_channels (
