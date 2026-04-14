@@ -15,11 +15,21 @@ db.pragma('foreign_keys = ON')
 // ── Schema ────────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
+    id              TEXT PRIMARY KEY,
+    email           TEXT UNIQUE NOT NULL,
+    name            TEXT NOT NULL,
+    password        TEXT NOT NULL,
+    tier            TEXT DEFAULT 'free',
+    email_verified  INTEGER DEFAULT 0,
+    created_at      TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS verify_tokens (
     id         TEXT PRIMARY KEY,
-    email      TEXT UNIQUE NOT NULL,
-    name       TEXT NOT NULL,
-    password   TEXT NOT NULL,
-    tier       TEXT DEFAULT 'free',
+    user_id    TEXT NOT NULL,
+    code       TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used       INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -110,6 +120,10 @@ db.exec(`
   );
 `)
 
+// Migrate: add email_verified to existing DBs that don't have it
+try { db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0") } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'free'") } catch {}
+
 // ── Auto-seed on first run ────────────────────────────────────
 function autoSeed() {
   const adminExists = db.prepare("SELECT id FROM users WHERE email = 'aniekaneazy@gmail.com'").get()
@@ -117,14 +131,12 @@ function autoSeed() {
 
   console.log('🌱 Auto-seeding database...')
 
-  // Admin user
   const userId = randomUUID()
   const hash   = bcrypt.hashSync('outriq2026', 10)
-  db.prepare('INSERT OR IGNORE INTO users (id, email, name, password, tier) VALUES (?,?,?,?,?)').run(
-    userId, 'aniekaneazy@gmail.com', 'Aniekan Israel', hash, 'growth'
+  db.prepare('INSERT OR IGNORE INTO users (id, email, name, password, tier, email_verified) VALUES (?,?,?,?,?,?)').run(
+    userId, 'aniekaneazy@gmail.com', 'Aniekan Israel', hash, 'growth', 1
   )
 
-  // Products
   const PRODUCTS = [
     { name: 'ChopFit Lagos',     category: 'Food & Fitness',   location: 'Lagos, Nigeria',   description: 'Healthy meal prep and delivery for busy Lagos professionals. Macro-balanced, locally sourced.', target_customer: 'Lagos professionals 25-40 who want to eat healthy', emoji: '🥗', color: '#10b981', match_score: 94, signals: 287, actions: 89, leads: 34 },
     { name: 'TechFlow Academy',  category: 'Education & Tech', location: 'Nigeria (Remote)', description: 'Practical coding bootcamps for Nigerian developers — Python, React, DevOps.', target_customer: 'Nigerians 18-35 wanting to break into tech', emoji: '💻', color: '#8b5cf6', match_score: 91, signals: 312, actions: 104, leads: 41 },
@@ -134,29 +146,21 @@ function autoSeed() {
   ]
 
   const PIP = {
-    'ChopFit Lagos':    { valueProp: 'Healthy, macro-balanced meal prep delivered to Lagos offices and homes', painPoints: ['No time to cook healthy', 'Junk food everywhere', 'Expensive diet plans'], searchTerms: ['healthy food delivery Lagos', 'meal prep Lagos', 'healthy lunch Lagos', 'clean eating Lagos'], platforms: ['nairaland','instagram','twitter'], emotionalTriggers: ['health anxiety','convenience','status'] },
-    'TechFlow Academy': { valueProp: 'Land your first tech job in 6 months with practical, project-based bootcamps', painPoints: ["Can't afford foreign bootcamps",'No local mentors','Imposter syndrome'], searchTerms: ['coding bootcamp Nigeria','learn programming Nigeria','tech jobs Nigeria','React developer Nigeria'], platforms: ['twitter','nairaland','linkedin'], emotionalTriggers: ['career fear','income anxiety','ambition'] },
-    'LegalEdge Nigeria':{ valueProp: 'Affordable legal protection for Nigerian startups — from CAC to contracts', painPoints: ['Expensive law firms','CAC confusion','Contract disputes'], searchTerms: ['CAC registration Nigeria','startup lawyer Nigeria','business registration Nigeria'], platforms: ['linkedin','nairaland','twitter'], emotionalTriggers: ['fear of loss','legitimacy','trust'] },
-    'FitGear Abuja':    { valueProp: 'Build your dream home gym in Abuja with premium equipment + free setup', painPoints: ['Gym membership costs','Traffic to gym','No privacy'], searchTerms: ['home gym Abuja','gym equipment Abuja','dumbbells Abuja'], platforms: ['instagram','twitter','nairaland'], emotionalTriggers: ['convenience','status','privacy'] },
-    'SafeRent Lagos':   { valueProp: 'Find verified Lagos rentals without agents — no scams, no hidden fees', painPoints: ['Agent fraud','Overpriced rents','Unsafe areas'], searchTerms: ['house for rent Lagos','apartment Lagos','verified landlords Lagos'], platforms: ['nairaland','twitter','facebook'], emotionalTriggers: ['security','trust','savings'] },
+    'ChopFit Lagos':    { valueProp: 'Healthy, macro-balanced meal prep delivered to Lagos offices', painPoints: ['No time to cook healthy','Junk food everywhere','Expensive diet plans'], searchTerms: ['healthy food delivery Lagos','meal prep Lagos','clean eating Lagos'], platforms: ['nairaland','instagram','twitter'] },
+    'TechFlow Academy': { valueProp: 'Land your first tech job in 6 months with practical bootcamps', painPoints: ["Can't afford foreign bootcamps",'No local mentors'], searchTerms: ['coding bootcamp Nigeria','learn programming Nigeria','tech jobs Nigeria'], platforms: ['twitter','nairaland','linkedin'] },
+    'LegalEdge Nigeria':{ valueProp: 'Affordable legal protection for Nigerian startups', painPoints: ['Expensive law firms','CAC confusion'], searchTerms: ['CAC registration Nigeria','startup lawyer Nigeria'], platforms: ['linkedin','nairaland','twitter'] },
+    'FitGear Abuja':    { valueProp: 'Build your dream home gym with premium equipment + free setup', painPoints: ['Gym membership costs','Traffic to gym'], searchTerms: ['home gym Abuja','gym equipment Abuja'], platforms: ['instagram','twitter','nairaland'] },
+    'SafeRent Lagos':   { valueProp: 'Find verified Lagos rentals without agents', painPoints: ['Agent fraud','Overpriced rents'], searchTerms: ['house for rent Lagos','verified landlords Lagos'], platforms: ['nairaland','twitter','facebook'] },
   }
 
-  const insertProduct = db.prepare(`INSERT OR IGNORE INTO products
-    (id, user_id, name, category, location, description, target_customer, emoji, color, match_score, pip_json, signals_count, actions_count, leads_count, impressions, clicks, status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-
+  const ins = db.prepare(`INSERT OR IGNORE INTO products (id,user_id,name,category,location,description,target_customer,emoji,color,match_score,pip_json,signals_count,actions_count,leads_count,impressions,clicks,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
   for (const p of PRODUCTS) {
-    insertProduct.run(
-      randomUUID(), userId, p.name, p.category, p.location, p.description, p.target_customer,
+    ins.run(randomUUID(), userId, p.name, p.category, p.location, p.description, p.target_customer,
       p.emoji, p.color, p.match_score, JSON.stringify(PIP[p.name] || {}),
       p.signals, p.actions, p.leads,
-      Math.floor(Math.random()*15000)+1000,
-      Math.floor(Math.random()*1000)+50,
-      p.status || 'active'
-    )
+      Math.floor(Math.random()*15000)+1000, Math.floor(Math.random()*1000)+50, p.status || 'active')
   }
 
-  // Platform channels
   const CHANNELS = [
     { id: 'twitter',   name: 'X / Twitter',   status: 'active',  signals_today: 89,  actions_today: 12, daily_limit: 72,  color: '#60a5fa' },
     { id: 'nairaland', name: 'Nairaland',      status: 'active',  signals_today: 124, actions_today: 8,  daily_limit: 75,  color: '#fb923c' },
@@ -167,28 +171,23 @@ function autoSeed() {
     { id: 'email',     name: 'Email Outreach', status: 'active',  signals_today: 0,   actions_today: 8,  daily_limit: 20,  color: '#a78bfa' },
     { id: 'quora',     name: 'Quora',          status: 'active',  signals_today: 21,  actions_today: 2,  daily_limit: 0,   color: '#fca5a5' },
   ]
+  const insCh = db.prepare('INSERT OR IGNORE INTO platform_channels (id,name,status,signals_today,actions_today,daily_limit,color) VALUES (?,?,?,?,?,?,?)')
+  for (const ch of CHANNELS) insCh.run(ch.id, ch.name, ch.status, ch.signals_today, ch.actions_today, ch.daily_limit, ch.color)
 
-  const insertCh = db.prepare('INSERT OR IGNORE INTO platform_channels (id, name, status, signals_today, actions_today, daily_limit, color) VALUES (?,?,?,?,?,?,?)')
-  for (const ch of CHANNELS) insertCh.run(ch.id, ch.name, ch.status, ch.signals_today, ch.actions_today, ch.daily_limit, ch.color)
-
-  // Distribution modules
   const MODULES = [
-    { id: 'respond',  name: 'Conversational Response', enabled: 1, description: 'AI replies to intent signals on platforms',   color: '#8b5cf6' },
+    { id: 'respond',  name: 'Conversational Response', enabled: 1, description: 'AI replies to intent signals on platforms',    color: '#8b5cf6' },
     { id: 'seo',      name: 'SEO Content',              enabled: 1, description: 'Generates SEO articles targeting search terms', color: '#22d3ee' },
     { id: 'geo',      name: 'GEO Optimisation',         enabled: 1, description: 'Optimises for AI-powered search engines',       color: '#10b981' },
     { id: 'outreach', name: 'Email Outreach',           enabled: 1, description: 'Personalised outreach to potential customers',  color: '#f59e0b' },
     { id: 'landing',  name: 'Landing Pages',            enabled: 1, description: 'Auto-generates conversion landing pages',       color: '#f472b6' },
   ]
+  const insMod = db.prepare('INSERT OR IGNORE INTO distribution_modules (id,name,enabled,description,color) VALUES (?,?,?,?,?)')
+  for (const m of MODULES) insMod.run(m.id, m.name, m.enabled, m.description, m.color)
 
-  const insertMod = db.prepare('INSERT OR IGNORE INTO distribution_modules (id, name, enabled, description, color) VALUES (?,?,?,?,?)')
-  for (const m of MODULES) insertMod.run(m.id, m.name, m.enabled, m.description, m.color)
-
-  // Seed one performance snapshot so analytics page has data
   const today = new Date().toISOString().split('T')[0]
-  db.prepare(`INSERT OR IGNORE INTO performance_snapshots (id, product_id, date, signals, actions, leads, impressions, clicks)
-              VALUES (?,NULL,?,?,?,?,?,?)`).run(randomUUID(), today, 1289, 342, 158, 48200, 3100)
+  db.prepare('INSERT OR IGNORE INTO performance_snapshots (id,product_id,date,signals,actions,leads,impressions,clicks) VALUES (?,NULL,?,?,?,?,?,?)').run(randomUUID(), today, 1289, 342, 158, 48200, 3100)
 
-  console.log('✅ Auto-seed complete — login: aniekaneazy@gmail.com / outriq2026')
+  console.log('✅ Auto-seed complete')
 }
 
 autoSeed()

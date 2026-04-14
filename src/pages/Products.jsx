@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, MapPin, Globe, Tag, Users, Check, CheckCircle, X, ChevronRight, Zap } from 'lucide-react'
+import { Plus, Search, MapPin, Globe, Tag, Users, Check, CheckCircle, X, ChevronRight, Zap, Brain } from 'lucide-react'
 import { useProducts } from '../hooks/useProducts'
 
 const CATEGORIES = ['Food & Beverage', 'Health & Fitness', 'Education & Tech', 'Legal Services', 'Real Estate', 'E-commerce', 'Business Services', 'Other']
@@ -359,9 +359,9 @@ export default function Products({ onNavigate }) {
   // Normalise API shape to match what ProductCard expects
   const PRODUCTS = rawProducts.map(p => ({
     ...p,
-    matchScore: p.match_score || 80,
-    pip: p.pip_json || { platforms: [] },
-    metrics: { signals: p.signals_count || 0, actions: p.actions_count || 0, leads: p.leads_count || 0 },
+    matchScore: p.match_score || 0,
+    pip: p.pip_json || { platforms: [], painPoints: [], searchTerms: [], valueProp: '' },
+    metrics: { signals: p.signals_count || 0, actions: p.actions_count || 0, leads: p.leads_count || 0, impressions: p.impressions || 0, clicks: p.clicks || 0 },
   }))
 
   const filtered = PRODUCTS.filter(p => {
@@ -413,14 +413,36 @@ export default function Products({ onNavigate }) {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {/* First-time empty state — user has no products at all */}
+      {PRODUCTS.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <Zap size={32} style={{ color: 'var(--violet-400)' }} />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-1)', letterSpacing: -0.5, marginBottom: 10 }}>Launch your first product</div>
+          <div style={{ fontSize: 14, color: 'var(--text-4)', lineHeight: 1.7, maxWidth: 460, margin: '0 auto 28px' }}>
+            Add a product and OUTRIQ will automatically build its AI profile, monitor 8 platforms for buyers, and start marketing it — all without ad spend.
+          </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 32 }}>
+            {[
+              { icon: Brain, text: 'AI Intelligence Profile generated' },
+              { icon: Search, text: 'Intent signals detected 24/7' },
+              { icon: Zap, text: 'Autonomous marketing executed' },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-1)', borderRadius: 8, padding: '7px 14px', fontSize: 12, color: 'var(--text-3)' }}>
+                <Icon size={12} style={{ color: 'var(--violet-400)' }} /> {text}
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-primary" style={{ fontSize: 14, padding: '12px 28px' }} onClick={() => setShowAdd(true)}>
+            <Plus size={15} /> Add Your First Product
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon"><Package size={24} /></div>
-          <div className="empty-title">No products found</div>
-          <div className="empty-desc">Try adjusting your search or filters, or add a new product.</div>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={() => setShowAdd(true)}>
-            <Plus size={13} /> Add Product
-          </button>
+          <div className="empty-title">No products match</div>
+          <div className="empty-desc">Try adjusting your search or filters.</div>
         </div>
       ) : (
         <div className="products-grid">
