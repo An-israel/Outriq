@@ -12,7 +12,7 @@ export async function apiFetch(path, options = {}) {
   const res  = await fetch(`${BASE}${path}`, { ...options, headers })
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
 
-  if (res.status === 401) {
+  if (res.status === 401 && !path.startsWith('/auth/')) {
     clearToken()
     window.location.reload()
     return
