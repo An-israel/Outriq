@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc '/c/Users/aniek/Downloads/AI-Marketing-Agent-Blueprint \\(1\\).docx' -t markdown)",
+      "Bash(pandoc \"C:/Users/aniek/Downloads/AI-Marketing-Agent-Blueprint \\(1\\).docx\" -t plain)",
+      "Bash(python3.exe --version)",
+      "Bash(py --version)",
+      "Bash(python -c \":*)",
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}
