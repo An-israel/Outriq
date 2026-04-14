@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Search, MapPin, Globe, Tag, Users, Check, CheckCircle, X, ChevronRight, Zap } from 'lucide-react'
-import { PRODUCTS } from '../data'
+import { useProducts } from '../hooks/useProducts'
 
 const CATEGORIES = ['Food & Beverage', 'Health & Fitness', 'Education & Tech', 'Legal Services', 'Real Estate', 'E-commerce', 'Business Services', 'Other']
 const LOCATIONS  = ['Lagos, Nigeria', 'Abuja, Nigeria', 'Port Harcourt, Nigeria', 'Ibadan, Nigeria', 'Nigeria (Remote/Nationwide)', 'Other']
@@ -101,16 +101,32 @@ function ProductModal({ product: p, onClose }) {
   )
 }
 
-function AddProductModal({ onClose }) {
+function AddProductModal({ onClose, onCreate }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({ name: '', description: '', targetCustomer: '', location: '', category: '', website: '' })
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const submit = () => {
+  const submit = async () => {
     setSubmitting(true)
-    setTimeout(() => { setSubmitting(false); setDone(true) }, 2000)
+    setError('')
+    try {
+      await onCreate({
+        name: form.name,
+        description: form.description,
+        target_customer: form.targetCustomer,
+        location: form.location,
+        category: form.category,
+        website: form.website,
+      })
+      setDone(true)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (done) return (
@@ -254,6 +270,8 @@ function AddProductModal({ onClose }) {
               ))}
             </div>
 
+            {error && <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', color: '#f87171', fontSize: 12, marginBottom: 14 }}>{error}</div>}
+
             <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.12)', borderRadius: 10, padding: '10px 14px', marginBottom: 20, fontSize: 12, color: 'var(--green-400)', display: 'flex', gap: 8, alignItems: 'flex-start', lineHeight: 1.6 }}>
               <CheckCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
               <span>OUTRIQ will begin autonomous marketing of this product within 2 minutes. No ad budget required.</span>
@@ -336,6 +354,15 @@ export default function Products({ onNavigate }) {
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
+  const { products: rawProducts, createProduct, updateProduct } = useProducts()
+
+  // Normalise API shape to match what ProductCard expects
+  const PRODUCTS = rawProducts.map(p => ({
+    ...p,
+    matchScore: p.match_score || 80,
+    pip: p.pip_json || { platforms: [] },
+    metrics: { signals: p.signals_count || 0, actions: p.actions_count || 0, leads: p.leads_count || 0 },
+  }))
 
   const filtered = PRODUCTS.filter(p => {
     const q = search.toLowerCase()
@@ -376,8 +403,8 @@ export default function Products({ onNavigate }) {
         {[
           { label: 'Total Products', val: PRODUCTS.length, color: 'var(--text-1)' },
           { label: 'Active', val: PRODUCTS.filter(p => p.status === 'active').length, color: 'var(--green-400)' },
-          { label: 'Total Signals', val: PRODUCTS.reduce((s, p) => s + p.metrics.signals, 0).toLocaleString(), color: 'var(--cyan-400)' },
-          { label: 'Total Leads', val: PRODUCTS.reduce((s, p) => s + p.metrics.leads, 0), color: 'var(--violet-400)' },
+          { label: 'Total Signals', val: PRODUCTS.reduce((s, p) => s + (p.metrics?.signals || 0), 0).toLocaleString(), color: 'var(--cyan-400)' },
+          { label: 'Total Leads', val: PRODUCTS.reduce((s, p) => s + (p.metrics?.leads || 0), 0), color: 'var(--violet-400)' },
         ].map(s => (
           <div key={s.label} style={{ background: 'var(--bg-surface)', backdropFilter: 'blur(20px)', border: '1px solid var(--border-1)', borderRadius: 14, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 500 }}>{s.label}</span>
@@ -415,7 +442,7 @@ export default function Products({ onNavigate }) {
       )}
 
       {selected && <ProductModal product={selected} onClose={() => setSelected(null)} />}
-      {showAdd && <AddProductModal onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddProductModal onClose={() => setShowAdd(false)} onCreate={createProduct} />}
     </>
   )
 }

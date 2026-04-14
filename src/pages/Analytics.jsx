@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { TrendingUp } from 'lucide-react'
-import { PERFORMANCE_DATA, PRODUCTS, COST_BREAKDOWN } from '../data'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 function LineChart({ data, width = 700, height = 170 }) {
   const pad = { top: 20, right: 20, bottom: 28, left: 40 }
@@ -108,8 +108,19 @@ function PlatformChart({ data }) {
 
 export default function Analytics() {
   const [timeframe, setTimeframe] = useState('weekly')
-  const chartData = timeframe === 'weekly' ? PERFORMANCE_DATA.weekly : PERFORMANCE_DATA.monthly
-  const totalCost = COST_BREAKDOWN.reduce((s, c) => s + parseInt(c.cost.replace('$', '')), 0)
+  const { summary, performance, platforms, funnel, products: apiProducts, costs, loading } = useAnalytics()
+
+  const PERFORMANCE_DATA = {
+    weekly:     performance?.weekly || [],
+    monthly:    performance?.monthly || [],
+    byPlatform: platforms || [],
+    funnel:     funnel || [],
+  }
+  const PRODUCTS    = apiProducts || []
+  const COST_BREAKDOWN = costs || []
+
+  const chartData  = timeframe === 'weekly' ? PERFORMANCE_DATA.weekly : PERFORMANCE_DATA.monthly
+  const totalCost  = COST_BREAKDOWN.reduce((s, c) => s + parseInt((c.cost || '$0').replace('$', '')), 0)
 
   return (
     <>
@@ -130,9 +141,9 @@ export default function Analytics() {
       {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Signals (Apr)', val: '1,520', change: '+10.1%', color: 'var(--cyan-400)' },
-          { label: 'Total Actions (Apr)', val: '694',   change: '+13.4%', color: 'var(--violet-400)' },
-          { label: 'Total Leads (Apr)',   val: '203',   change: '+14.0%', color: 'var(--green-400)' },
+          { label: 'Total Signals (Apr)', val: (summary?.totalSignals || 1520).toLocaleString(), change: summary?.signalsChange || '+10.1%', color: 'var(--cyan-400)' },
+          { label: 'Total Actions (Apr)', val: (summary?.totalActions || 694).toLocaleString(),  change: summary?.actionsChange || '+13.4%', color: 'var(--violet-400)' },
+          { label: 'Total Leads (Apr)',   val: (summary?.totalLeads || 203).toLocaleString(),    change: summary?.leadsChange  || '+14.0%', color: 'var(--green-400)' },
           { label: 'Avg Cost / Product', val: `$${Math.round(totalCost / 100)}`, change: '-2.1%', color: 'var(--amber-400)' },
         ].map(s => (
           <div key={s.label} style={{ background: 'var(--bg-surface)', backdropFilter: 'blur(20px)', border: '1px solid var(--border-1)', borderRadius: 'var(--r-xl)', padding: '18px 20px' }}>
@@ -191,7 +202,10 @@ export default function Analytics() {
               </thead>
               <tbody>
                 {PRODUCTS.map(p => {
-                  const conv = ((p.metrics.leads / p.metrics.signals) * 100).toFixed(1)
+                  const sig = p.signals_count || 0
+                  const leads = p.leads_count || 0
+                  const conv = sig > 0 ? ((leads / sig) * 100).toFixed(1) : '0.0'
+                  const score = p.aiScore || p.match_score || 80
                   return (
                     <tr key={p.id}>
                       <td>
@@ -201,11 +215,11 @@ export default function Analytics() {
                         </div>
                       </td>
                       <td><span className={`badge ${p.status === 'active' ? 'badge-green' : 'badge-amber'}`}>{p.status}</span></td>
-                      <td style={{ color: 'var(--cyan-400)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{p.metrics.signals}</td>
-                      <td style={{ color: 'var(--violet-400)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{p.metrics.actions}</td>
-                      <td style={{ color: 'var(--green-400)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>{p.metrics.leads}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{p.metrics.impressions.toLocaleString()}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{p.metrics.clicks.toLocaleString()}</td>
+                      <td style={{ color: 'var(--cyan-400)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{sig}</td>
+                      <td style={{ color: 'var(--violet-400)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{p.actions_count || 0}</td>
+                      <td style={{ color: 'var(--green-400)', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>{leads}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{(p.impressions || 0).toLocaleString()}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{(p.clicks || 0).toLocaleString()}</td>
                       <td>
                         <span style={{ fontSize: 12.5, fontWeight: 700, color: parseFloat(conv) > 12 ? 'var(--green-400)' : 'var(--amber-400)', fontFamily: 'var(--font-mono)' }}>
                           {conv}%
@@ -214,9 +228,9 @@ export default function Analytics() {
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <div style={{ width: 44, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-                            <div style={{ width: `${p.matchScore}%`, height: '100%', background: 'linear-gradient(90deg, #6d28d9, #a78bfa)', borderRadius: 2 }} />
+                            <div style={{ width: `${score}%`, height: '100%', background: 'linear-gradient(90deg, #6d28d9, #a78bfa)', borderRadius: 2 }} />
                           </div>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: p.matchScore >= 85 ? 'var(--green-400)' : 'var(--amber-400)' }}>{p.matchScore}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: score >= 85 ? 'var(--green-400)' : 'var(--amber-400)' }}>{score}</span>
                         </div>
                       </td>
                     </tr>

@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
-import { TrendingUp, TrendingDown, Package, Radio, Zap, Users, ArrowRight } from 'lucide-react'
-import { INTENT_SIGNALS, ACTIONS, PLATFORM_CHANNELS, SUMMARY_STATS, PRODUCTS } from '../data'
+import { useState, useEffect } from 'react'
+import { TrendingUp, TrendingDown, Package, Radio, Zap, Users } from 'lucide-react'
+import { useSignals } from '../hooks/useSignals'
+import { useActions } from '../hooks/useActions'
+import { useAnalytics } from '../hooks/useAnalytics'
+import { useProducts } from '../hooks/useProducts'
+import { usePlatforms } from '../hooks/usePlatforms'
 
-// Animated counter
 function useCounter(target, duration = 1000) {
   const [count, setCount] = useState(0)
   useEffect(() => {
-    if (target === 0) return
+    if (!target) return
     let frame = 0
     const totalFrames = Math.round(duration / 16)
     const timer = setInterval(() => {
@@ -17,20 +20,20 @@ function useCounter(target, duration = 1000) {
       if (frame >= totalFrames) { setCount(target); clearInterval(timer) }
     }, 16)
     return () => clearInterval(timer)
-  }, [target])
+  }, [target, duration])
   return count
 }
 
-function MetricCard({ label, value, change, up, colorClass, icon: Icon, delay = 0 }) {
+function MetricCard({ label, value, change, up, colorClass, delay = 0 }) {
   const [visible, setVisible] = useState(false)
   useEffect(() => { const t = setTimeout(() => setVisible(true), delay); return () => clearTimeout(t) }, [delay])
-  const count = useCounter(visible ? value : 0, 1100)
+  const count = useCounter(visible ? (typeof value === 'number' ? value : parseInt(value) || 0) : 0, 1100)
 
   return (
     <div className={`metric-card ${colorClass}`} style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
       <div className="metric-label">{label}</div>
       <div className={`metric-value ${colorClass} count-animate`}>
-        {count.toLocaleString()}
+        {typeof value === 'string' && value.startsWith('$') ? value : count.toLocaleString()}
       </div>
       <div className={`metric-change ${up ? 'up' : 'down'}`}>
         {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
@@ -41,57 +44,44 @@ function MetricCard({ label, value, change, up, colorClass, icon: Icon, delay = 
   )
 }
 
-function PlatformIcon({ pKey, platform }) {
-  return <div className={`signal-platform-icon platform-${platform}`}>{pKey}</div>
-}
-
 function TypePill({ type }) {
   return <span className={`signal-type-pill type-${type}`}>{type}</span>
 }
 
-function LiveSignalFeed({ signals }) {
-  const [feed, setFeed] = useState(signals.slice(0, 7))
-  const counterRef = useRef(7)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const next = { ...signals[counterRef.current % signals.length], id: `live-${counterRef.current}`, time: 'just now' }
-      counterRef.current++
-      setFeed(prev => [next, ...prev].slice(0, 9))
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [signals])
-
+function LiveSignalFeed({ signals, live }) {
   return (
     <div className="signal-feed">
-      {feed.map((s, i) => (
-        <div className="signal-item" key={`${s.id}-${i}`}>
-          <PlatformIcon pKey={s.platformKey} platform={s.platform} />
+      {signals.slice(0, 9).map((s, i) => (
+        <div className="signal-item" key={`${s.id}-${i}`} style={{ animation: i === 0 && live ? 'slide-in 0.35s ease' : 'none' }}>
+          <div className={`signal-platform-icon platform-${s.platform}`}>{s.platform_key}</div>
           <div className="signal-body">
             <div className="signal-meta">
-              <span className="signal-platform-name">{s.platformLabel}</span>
-              <TypePill type={s.signalType} />
-              <span className="signal-time">{s.time}</span>
+              <span className="signal-platform-name">{s.platform_label}</span>
+              <TypePill type={s.signal_type} />
+              <span className="signal-time">{s.time || 'recent'}</span>
             </div>
             <div className="signal-text" title={s.text}>{s.text}</div>
           </div>
           <div className="signal-score">
-            <div className={`score-value ${s.score >= 85 ? 'score-high' : s.score >= 70 ? 'score-medium' : 'score-low'}`}>
-              {s.score}
-            </div>
+            <div className={`score-value ${s.score >= 85 ? 'score-high' : s.score >= 70 ? 'score-medium' : 'score-low'}`}>{s.score}</div>
             <div className="score-label">Match</div>
           </div>
         </div>
       ))}
+      {signals.length === 0 && (
+        <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-4)', fontSize: 12.5 }}>
+          No signals yet — monitoring active platforms...
+        </div>
+      )}
     </div>
   )
 }
 
-function ChannelStatusGrid({ channels }) {
+function ChannelStatusGrid({ platforms }) {
   return (
     <div className="channel-grid">
-      {channels.slice(0, 8).map(ch => {
-        const usePct = ch.limit > 0 ? Math.round((ch.actionsToday / ch.limit) * 100) : 0
+      {platforms.map(ch => {
+        const usePct = ch.daily_limit > 0 ? Math.round((ch.actions_today / ch.daily_limit) * 100) : 0
         const barColor = usePct > 80 ? '#f87171' : usePct > 60 ? '#fbbf24' : '#34d399'
         return (
           <div className="channel-card" key={ch.id}>
@@ -99,16 +89,16 @@ function ChannelStatusGrid({ channels }) {
               <span className="channel-name">{ch.name}</span>
               <span className={`channel-indicator ${ch.status}`} />
             </div>
-            <div className="channel-stat">{ch.signals}</div>
+            <div className="channel-stat">{ch.signals_today}</div>
             <div className="channel-sub">Signals Today</div>
-            {ch.limit > 0 && (
+            {ch.daily_limit > 0 && (
               <>
                 <div className="channel-bar">
-                  <div className="channel-bar-fill" style={{ width: `${usePct}%`, background: barColor }} />
+                  <div className="channel-bar-fill" style={{ width: `${Math.min(usePct, 100)}%`, background: barColor }} />
                 </div>
                 <div style={{ fontSize: 9.5, color: 'var(--text-4)', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)' }}>
-                  <span>{ch.actionsToday} used</span>
-                  <span>{ch.limit} max</span>
+                  <span>{ch.actions_today} used</span>
+                  <span>{ch.daily_limit} max</span>
                 </div>
               </>
             )}
@@ -125,168 +115,128 @@ function ActionRow({ action }) {
     content:  { label: 'SEO Content', color: 'var(--cyan-400)',   bg: 'rgba(34,211,238,0.08)' },
     outreach: { label: 'Outreach',    color: 'var(--green-400)',  bg: 'rgba(16,185,129,0.08)' },
     landing:  { label: 'Landing Page',color: 'var(--amber-400)',  bg: 'rgba(245,158,11,0.08)' },
+    geo:      { label: 'GEO',         color: 'var(--cyan-300)',   bg: 'rgba(34,211,238,0.06)' },
   }
   const t = typeMap[action.type] || typeMap.content
   const statusCls = action.status === 'success' ? 'badge-emerald' : action.status === 'processing' ? 'badge-amber' : 'badge-muted'
   const statusLabel = action.status === 'success' ? 'Executed' : action.status === 'processing' ? 'Processing' : 'Queued'
+  const time = action.created_at ? new Date(action.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
 
   return (
     <tr>
       <td>
-        <span style={{ display: 'inline-block', padding: '3px 9px', background: t.bg, color: t.color, borderRadius: 100, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.3px' }}>
+        <span style={{ display: 'inline-block', padding: '3px 9px', background: t.bg, color: t.color, borderRadius: 100, fontSize: 10.5, fontWeight: 700 }}>
           {t.label}
         </span>
       </td>
       <td style={{ color: 'var(--text-1)', fontWeight: 500, maxWidth: 260 }}>
         <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12.5 }}>{action.title}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{action.desc}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{action.description}</div>
       </td>
-      <td><span className="badge badge-violet" style={{ fontSize: 10 }}>{action.product}</span></td>
+      <td><span className="badge badge-violet" style={{ fontSize: 10 }}>{action.product_name}</span></td>
       <td><span className={`badge ${statusCls}`}>{statusLabel}</span></td>
-      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-4)' }}>{action.time}</td>
-      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: action.metrics.clicks > 0 ? 'var(--green-400)' : 'var(--text-4)', fontWeight: 700 }}>
-        {action.metrics.clicks > 0 ? `+${action.metrics.clicks}` : '—'}
+      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-4)' }}>{time}</td>
+      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: action.clicks > 0 ? 'var(--green-400)' : 'var(--text-4)', fontWeight: 700 }}>
+        {action.clicks > 0 ? `+${action.clicks}` : '—'}
       </td>
     </tr>
   )
 }
 
 export default function Dashboard({ onNavigate }) {
+  const { summary }                      = useAnalytics()
+  const { signals, live }                = useSignals({ limit: 12 })
+  const { actions }                      = useActions({ limit: 8 })
+  const { products }                     = useProducts()
+  const { platforms }                    = usePlatforms()
+
+  const stats = summary || {}
+
   return (
     <>
-      {/* Header */}
       <div className="page-header">
         <div>
           <div className="page-title">Overview</div>
           <div className="page-subtitle">
-            Monitoring <strong style={{ color: 'var(--violet-400)', fontWeight: 700 }}>5 products</strong> across{' '}
-            <strong style={{ color: 'var(--cyan-400)', fontWeight: 700 }}>8 platforms</strong> — AI engine active
+            Monitoring <strong style={{ color: 'var(--violet-400)' }}>{products.length || 5} products</strong> across{' '}
+            <strong style={{ color: 'var(--cyan-400)' }}>8 platforms</strong> — AI engine active
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <div className="live-badge">
-            <span className="live-dot" /> Live
-          </div>
+          <div className="live-badge"><span className="live-dot" /> Live</div>
           <button className="btn btn-primary btn-sm" onClick={() => onNavigate('products')}>
             <Package size={13} /> Add Product
           </button>
         </div>
       </div>
 
-      {/* Hero metric cards */}
       <div className="metrics-grid">
-        <MetricCard label="Active Products"  value={SUMMARY_STATS.activeProducts} change="+1"  up colorClass="violet" icon={Package} delay={0}   />
-        <MetricCard label="Signals Today"    value={SUMMARY_STATS.signalsToday}   change={SUMMARY_STATS.signalsChange} up colorClass="cyan"   icon={Radio}   delay={80}  />
-        <MetricCard label="Actions Taken"    value={SUMMARY_STATS.actionsToday}   change={SUMMARY_STATS.actionsChange} up colorClass="green"  icon={Zap}     delay={160} />
-        <MetricCard label="Leads Generated"  value={SUMMARY_STATS.leadsToday}     change={SUMMARY_STATS.leadsChange}   up colorClass="amber"  icon={Users}   delay={240} />
+        <MetricCard label="Active Products"  value={stats.activeProducts || 0}  change="+1"   up colorClass="violet" delay={0}   />
+        <MetricCard label="Signals Today"    value={stats.signalsToday || 0}     change={stats.signalsChange || '+18%'} up colorClass="cyan"   delay={80}  />
+        <MetricCard label="Actions Taken"    value={stats.totalActions || 0}     change={stats.actionsChange || '+24%'} up colorClass="green"  delay={160} />
+        <MetricCard label="Leads Generated"  value={stats.totalLeads || 0}       change={stats.leadsChange || '+12%'}   up colorClass="amber"  delay={240} />
       </div>
 
-      {/* Signal feed + channel health */}
       <div className="dashboard-grid">
         <div className="card">
           <div className="card-header">
             <span className="card-title">Live Intent Signals</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div className="live-badge"><span className="live-dot" />Streaming</div>
-              <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('intelligence')}>
-                All <ArrowRight size={11} />
-              </button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: 'var(--green-400)', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 100, padding: '3px 10px' }}>
+                <span style={{ width: 5, height: 5, background: 'var(--green-400)', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 6px rgba(52,211,153,0.8)' }} />
+                {live ? 'NEW SIGNAL' : 'STREAMING'}
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-4)' }}>All</span>
             </div>
           </div>
-          <LiveSignalFeed signals={INTENT_SIGNALS} />
+          <LiveSignalFeed signals={signals} live={live} />
         </div>
 
         <div className="card">
           <div className="card-header">
             <span className="card-title">Platform Health</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('distribution')}>
-              Manage <ArrowRight size={11} />
-            </button>
+            <span style={{ fontSize: 11, color: 'var(--violet-400)', cursor: 'pointer', fontWeight: 600 }} onClick={() => onNavigate('distribution')}>Manage →</span>
           </div>
-          <ChannelStatusGrid channels={PLATFORM_CHANNELS} />
-
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-1)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              {[
-                { label: 'Active', val: '7/8' },
-                { label: 'Rate OK', val: '7/7' },
-                { label: 'API Health', val: '100%' },
-              ].map(s => (
-                <div key={s.label} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--green-400)', fontFamily: 'var(--font-mono)', letterSpacing: -0.5 }}>{s.val}</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: 2, fontWeight: 700 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ChannelStatusGrid platforms={platforms.length ? platforms : []} />
         </div>
       </div>
 
-      {/* Recent actions */}
-      <div className="card" style={{ marginBottom: 18 }}>
-        <div className="card-header">
-          <span className="card-title">Recent Actions</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('distribution')}>
-            View All <ArrowRight size={11} />
-          </button>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
+      {actions.length > 0 && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="card-header">
+            <span className="card-title">Recent Actions</span>
+            <span style={{ fontSize: 11, color: 'var(--violet-400)', cursor: 'pointer', fontWeight: 600 }} onClick={() => onNavigate('distribution')}>View All →</span>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
                 <th>Type</th><th>Action</th><th>Product</th><th>Status</th><th>Time</th><th>Clicks</th>
               </tr>
             </thead>
-            <tbody>
-              {ACTIONS.slice(0, 6).map(a => <ActionRow key={a.id} action={a} />)}
-            </tbody>
+            <tbody>{actions.slice(0, 6).map(a => <ActionRow key={a.id} action={a} />)}</tbody>
           </table>
         </div>
-      </div>
+      )}
 
-      {/* Products strip */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '1.4px' }}>Active Products</div>
-          <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('products')}>
-            Manage All <ArrowRight size={11} />
-          </button>
-        </div>
+      {products.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-          {PRODUCTS.map(p => (
-            <div
-              key={p.id}
-              className="card"
-              style={{ padding: 16, cursor: 'pointer' }}
-              onClick={() => onNavigate('products')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: 9,
-                  background: `${p.color}18`, border: `1px solid ${p.color}35`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0
-                }}>
-                  {p.emoji}
+          {products.slice(0, 5).map(p => (
+            <div key={p.id} className="card" style={{ padding: '14px 16px', cursor: 'pointer' }} onClick={() => onNavigate('products')}>
+              <div style={{ fontSize: 20, marginBottom: 6 }}>{p.emoji}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
+                  <div style={{ width: `${p.match_score || 80}%`, height: '100%', background: p.color || 'var(--violet-500)', borderRadius: 1 }} />
                 </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', letterSpacing: -0.2, lineHeight: 1.2 }}>{p.name}</div>
-                  <span className={`badge ${p.status === 'active' ? 'badge-green' : 'badge-amber'}`} style={{ fontSize: 9, padding: '1px 6px', marginTop: 3 }}>{p.status}</span>
-                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: p.color || 'var(--violet-400)', fontFamily: 'var(--font-mono)' }}>{p.match_score || 80}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--cyan-400)', fontFamily: 'var(--font-mono)', letterSpacing: -0.8 }}>{p.metrics.signals}</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>Signals</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--green-400)', fontFamily: 'var(--font-mono)', letterSpacing: -0.8 }}>{p.metrics.leads}</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>Leads</div>
-                </div>
+              <div style={{ marginTop: 6, fontSize: 9.5, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                <span style={{ color: p.status === 'active' ? 'var(--green-400)' : 'var(--amber-400)' }}>● </span>{p.status}
               </div>
             </div>
           ))}
         </div>
-      </div>
+      )}
     </>
   )
 }

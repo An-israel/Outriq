@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
-import { Brain, RefreshCw, CheckCircle } from 'lucide-react'
-import { INTENT_SIGNALS, PRODUCTS } from '../data'
+import { useState } from 'react'
+import { Brain, RefreshCw, CheckCircle, Zap } from 'lucide-react'
+import { useSignals } from '../hooks/useSignals'
+import { useProducts } from '../hooks/useProducts'
+import { api } from '../api/client'
 
 function PlatformIcon({ pKey, platform }) {
   return <div className={`signal-platform-icon platform-${platform}`}>{pKey}</div>
@@ -10,8 +12,19 @@ function TypePill({ type }) {
   return <span className={`signal-type-pill type-${type}`}>{type}</span>
 }
 
-function SignalDetail({ signal, onClose }) {
-  const product = PRODUCTS.find(p => p.id === signal.matchedProduct)
+function SignalDetail({ signal, onClose, onSimulate, products }) {
+  const [executing, setExecuting] = useState(false)
+  const [result, setResult] = useState(null)
+  const product = products.find(p => p.id === signal.product_id)
+
+  async function executeAction() {
+    setExecuting(true)
+    try {
+      const data = await api.post(`/signals/${signal.id}/act`, { type: 'respond' })
+      setResult(data)
+    } catch (e) { console.error(e) }
+    finally { setExecuting(false) }
+  }
   return (
     <div style={{
       background: 'rgba(255,255,255,0.035)',
@@ -61,44 +74,53 @@ function SignalDetail({ signal, onClose }) {
       )}
 
       <div style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.18)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--violet-300)', lineHeight: 1.55, marginBottom: 14 }}>
-        Post a helpful, natural recommendation on {signal.platformLabel}. Use platform-specific tone — Nigerian English for Nairaland, professional for LinkedIn. Quality filter score must exceed 80/100.
+        Post a helpful, natural recommendation on {signal.platform_label}. Use platform-specific tone — Nigerian English for Nairaland, professional for LinkedIn. Quality filter score must exceed 80/100.
       </div>
 
-      <button className="btn btn-primary w-full btn-sm">
-        <Brain size={13} /> Execute Action
+      {result && (
+        <div style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--green-400)', marginBottom: 14, lineHeight: 1.6 }}>
+          <CheckCircle size={11} style={{ display: 'inline', marginRight: 5 }} />
+          Action queued — Claude is generating the response...
+        </div>
+      )}
+
+      <button className="btn btn-primary w-full btn-sm" onClick={executeAction} disabled={executing || !!result}>
+        <Brain size={13} /> {executing ? 'Generating...' : result ? 'Action Queued ✓' : 'Execute Action'}
       </button>
     </div>
   )
 }
 
 export default function Intelligence() {
-  const [signals, setSignals] = useState(INTENT_SIGNALS)
+  const { signals, live, refresh, simulateSignals } = useSignals({ limit: 30 })
+  const { products } = useProducts()
   const [selected, setSelected] = useState(null)
   const [filterType, setFilterType] = useState('all')
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const counterRef = useRef(INTENT_SIGNALS.length)
+  const [simulating, setSimulating] = useState(false)
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const next = INTENT_SIGNALS[counterRef.current % INTENT_SIGNALS.length]
-      counterRef.current++
-      setSignals(prev => [{ ...next, id: `sig-new-${counterRef.current}`, time: 'just now' }, ...prev].slice(0, 20))
-    }, 6000)
-    return () => clearInterval(interval)
-  }, [])
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refresh()
+    setIsRefreshing(false)
+  }
 
-  const handleRefresh = () => { setIsRefreshing(true); setTimeout(() => setIsRefreshing(false), 1000) }
+  const handleSimulate = async () => {
+    if (!products.length) return
+    setSimulating(true)
+    const pid = products.find(p => p.status === 'active')?.id || products[0].id
+    await simulateSignals(pid, 5)
+    setSimulating(false)
+  }
 
-  const filtered = signals.filter(s => filterType === 'all' || s.signalType === filterType)
-
-  const avgScore = Math.round(signals.reduce((a, s) => a + s.score, 0) / signals.length)
+  const filtered = signals.filter(s => filterType === 'all' || s.signal_type === filterType)
+  const avgScore = signals.length ? Math.round(signals.reduce((a, s) => a + s.score, 0) / signals.length) : 0
   const highConf = signals.filter(s => s.score >= 85).length
 
-  // Signal type counts
   const typeCounts = ['question', 'need', 'complaint', 'search'].map(t => ({
     type: t,
-    count: signals.filter(s => s.signalType === t).length,
-    pct: Math.round((signals.filter(s => s.signalType === t).length / signals.length) * 100),
+    count: signals.filter(s => s.signal_type === t).length,
+    pct: signals.length ? Math.round((signals.filter(s => s.signal_type === t).length / signals.length) * 100) : 0,
   }))
 
   return (
@@ -109,7 +131,10 @@ export default function Intelligence() {
           <div className="page-subtitle">Real-time intent signal detection across 7 active platforms</div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <div className="live-badge"><span className="live-dot" />Monitoring</div>
+          <div className="live-badge"><span className="live-dot" />{live ? 'NEW SIGNAL' : 'Monitoring'}</div>
+          <button className="btn btn-secondary btn-sm" onClick={handleSimulate} disabled={simulating}>
+            <Zap size={12} /> {simulating ? 'Generating...' : 'Generate Signals'}
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleRefresh}>
             <RefreshCw size={12} className={isRefreshing ? 'spinning' : ''} /> Refresh
           </button>
@@ -165,17 +190,17 @@ export default function Intelligence() {
                     onClick={() => setSelected(s.id === selected?.id ? null : s)}
                     style={selected?.id === s.id ? { borderColor: 'var(--border-accent)', background: 'rgba(139,92,246,0.07)' } : {}}
                   >
-                    <PlatformIcon pKey={s.platformKey} platform={s.platform} />
+                    <PlatformIcon pKey={s.platform_key} platform={s.platform} />
                     <div className="signal-body">
                       <div className="signal-meta">
-                        <span className="signal-platform-name">{s.platformLabel}</span>
-                        <TypePill type={s.signalType} />
+                        <span className="signal-platform-name">{s.platform_label}</span>
+                        <TypePill type={s.signal_type} />
                         <span className="signal-time">{s.time}</span>
                       </div>
                       <div className="signal-text" title={s.text}>{s.text}</div>
-                      {PRODUCTS.find(p => p.id === s.matchedProduct) && (
+                      {products.find(p => p.id === s.product_id) && (
                         <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-4)' }}>
-                          → {PRODUCTS.find(p => p.id === s.matchedProduct)?.name}
+                          → {products.find(p => p.id === s.product_id)?.name}
                         </div>
                       )}
                     </div>
@@ -195,7 +220,7 @@ export default function Intelligence() {
         {/* Right panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {selected ? (
-            <SignalDetail signal={selected} onClose={() => setSelected(null)} />
+            <SignalDetail signal={selected} onClose={() => setSelected(null)} products={products} />
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: 32 }}>
               <div className="empty-icon" style={{ margin: '0 auto 14px' }}><Brain size={22} /></div>

@@ -5,13 +5,30 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server/index.js",
+    "dev:full": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "node server/data/seed.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.9.0",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.344.0",
+    "morgan": "^1.10.1",
+    "node-cron": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.344.0"
+    "uuid": "^13.0.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

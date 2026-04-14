@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MessageSquare, FileText, Mail, Globe, Zap, CheckCircle, Clock, AlertCircle } from 'lucide-react'
-import { ACTIONS, PLATFORM_CHANNELS, PRODUCTS } from '../data'
+import { useActions } from '../hooks/useActions'
+import { usePlatforms } from '../hooks/usePlatforms'
 
 const MODULES = [
   {
@@ -112,9 +113,18 @@ function ActionIcon({ type }) {
 export default function Distribution() {
   const [modules, setModules] = useState(MODULES)
   const [activeTab, setActiveTab] = useState('log')
+  const { actions } = useActions({ limit: 30 })
+  const { platforms } = usePlatforms()
   const toggle = id => setModules(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m))
 
   const totalToday = modules.reduce((s, m) => s + m.stats.today, 0)
+  const ACTIONS = actions
+  const PLATFORM_CHANNELS = platforms.map(ch => ({
+    ...ch,
+    limit: ch.daily_limit,
+    actionsToday: ch.actions_today,
+    signals: ch.signals_today,
+  }))
 
   return (
     <>
@@ -166,23 +176,28 @@ export default function Distribution() {
                 <span className="card-title">Recent Actions</span>
                 <span style={{ fontSize: 10.5, color: 'var(--text-4)', fontFamily: 'var(--font-mono)' }}>{ACTIONS.length} total</span>
               </div>
+              {ACTIONS.length === 0 && (
+                <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>
+                  No actions yet — execute signals from the Intelligence page
+                </div>
+              )}
               {ACTIONS.map(a => (
                 <div className="action-item" key={a.id}>
                   <ActionIcon type={a.type} />
                   <div className="action-body">
                     <div className="action-title">{a.title}</div>
-                    <div className="action-desc">{a.desc}</div>
+                    <div className="action-desc">{a.description}</div>
                     <div style={{ display: 'flex', gap: 7, marginTop: 6 }}>
-                      <span className="badge badge-violet" style={{ fontSize: 9.5 }}>{a.product}</span>
+                      <span className="badge badge-violet" style={{ fontSize: 9.5 }}>{a.product_name}</span>
                       <span className={`badge ${a.status === 'success' ? 'badge-green' : a.status === 'processing' ? 'badge-amber' : 'badge-muted'}`} style={{ fontSize: 9.5 }}>
                         {a.status === 'success' ? 'Executed' : a.status === 'processing' ? 'Processing' : 'Queued'}
                       </span>
                     </div>
                   </div>
                   <div className="action-meta">
-                    <span className="action-time">{a.time}</span>
-                    {a.metrics.clicks > 0 && (
-                      <span style={{ fontSize: 11, color: 'var(--green-400)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>+{a.metrics.clicks}</span>
+                    <span className="action-time">{a.created_at ? new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                    {a.clicks > 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--green-400)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>+{a.clicks}</span>
                     )}
                   </div>
                 </div>
