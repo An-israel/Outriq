@@ -10,7 +10,8 @@ const DB_PATH   = IS_VERCEL ? '/tmp/outriq.db' : join(__dirname, 'outriq.db')
 
 const db = new Database(DB_PATH)
 if (!IS_VERCEL) db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+// FK constraints are only meaningful with a persistent DB — Vercel /tmp resets on every cold start
+if (!IS_VERCEL) db.pragma('foreign_keys = ON')
 
 // ── Schema ────────────────────────────────────────────────────
 db.exec(`
