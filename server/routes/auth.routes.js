@@ -1,140 +1,102 @@
-import { Router }    from 'express'
-import bcrypt        from 'bcryptjs'
-import jwt           from 'jsonwebtoken'
+import { Router } from 'express'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 import { v4 as uuid } from 'uuid'
-import { getOne, run } from '../db.js'
+import supabase, { check } from '../db.js'
 import { sendVerificationEmail } from '../services/email.service.js'
 
 const router = Router()
 
 function issueToken(user) {
-  return jwt.sign(
-    { id: user.id, email: user.email, name: user.name },
-    process.env.JWT_SECRET,
-    { expiresIn: '30d' }
-  )
+  return jwt.sign({ id: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '30d' })
 }
+function generateOTP() { return Math.floor(100000 + Math.random() * 900000).toString() }
 
-function generateOTP() {
-  return Math.floor(100000 + Math.random() * 900000).toString()
-}
-
-// ── Register ──────────────────────────────────────────────────
 router.post('/register', async (req, res, next) => {
   try {
     const { email, name, password } = req.body
-    if (!email || !name || !password)
-      return res.status(400).json({ error: 'Full name, email and password are required' })
-    if (password.length < 6)
-      return res.status(400).json({ error: 'Password must be at least 6 characters' })
+    if (!email || !name || !password) return res.status(400).json({ error: 'Full name, email and password are required' })
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
 
     const clean = email.toLowerCase().trim()
-    const existing = await getOne('SELECT id FROM users WHERE email = ?', [clean])
+    const { data: existing } = await supabase.from('users').select('id').eq('email', clean).maybeSingle()
     if (existing) return res.status(409).json({ error: 'An account with this email already exists' })
 
     const hash = await bcrypt.hash(password, 10)
-    const id   = uuid()
-    await run('INSERT INTO users (id, email, name, password, tier, email_verified) VALUES (?,?,?,?,?,?)',
-      [id, clean, name.trim(), hash, 'free', 0])
+    const id = uuid()
+    check(await supabase.from('users').insert({ id, email: clean, name: name.trim(), password: hash, tier: 'free', email_verified: 0 }))
 
-    const code      = generateOTP()
+    const code = generateOTP()
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-    await run('INSERT INTO verify_tokens (id, user_id, code, expires_at) VALUES (?,?,?,?)',
-      [uuid(), id, code, expiresAt])
+    check(await supabase.from('verify_tokens').insert({ id: uuid(), user_id: id, code, expires_at: expiresAt }))
 
     const result = await sendVerificationEmail(clean, name.trim(), code)
-
-    res.status(201).json({
-      needsVerify: true,
-      userId: id,
-      email: clean,
-      emailSent: result.sent,
-      ...(result.sent ? {} : { demoCode: code }),
-    })
+    res.status(201).json({ needsVerify: true, userId: id, email: clean, emailSent: result.sent, ...(result.sent ? {} : { demoCode: code }) })
   } catch (err) { next(err) }
 })
 
-// ── Verify Email ──────────────────────────────────────────────
 router.post('/verify-email', async (req, res, next) => {
   try {
     const { userId, code } = req.body
     if (!userId || !code) return res.status(400).json({ error: 'userId and code required' })
 
-    const token = await getOne(
-      "SELECT * FROM verify_tokens WHERE user_id = ? AND code = ? AND used = 0 AND expires_at > now() ORDER BY created_at DESC LIMIT 1",
-      [userId, code.trim()]
-    )
-    if (!token) return res.status(400).json({ error: 'Invalid or expired code. Please check and try again.' })
+    const { data: token } = await supabase.from('verify_tokens')
+      .select('*').eq('user_id', userId).eq('code', code.trim()).eq('used', 0)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (!token) return res.status(400).json({ error: 'Invalid or expired code.' })
 
-    await run('UPDATE verify_tokens SET used = 1 WHERE id = ?', [token.id])
-    await run('UPDATE users SET email_verified = 1 WHERE id = ?', [userId])
+    check(await supabase.from('verify_tokens').update({ used: 1 }).eq('id', token.id))
+    check(await supabase.from('users').update({ email_verified: 1 }).eq('id', userId))
 
-    const user      = await getOne('SELECT id, email, name, tier FROM users WHERE id = ?', [userId])
-    const jwt_token = issueToken(user)
-    res.json({ token: jwt_token, user })
+    const { data: user } = await supabase.from('users').select('id, email, name, tier').eq('id', userId).single()
+    res.json({ token: issueToken(user), user })
   } catch (err) { next(err) }
 })
 
-// ── Resend Code ───────────────────────────────────────────────
 router.post('/resend-verify', async (req, res, next) => {
   try {
     const { userId } = req.body
     if (!userId) return res.status(400).json({ error: 'userId required' })
 
-    const user = await getOne('SELECT id, email, name, email_verified FROM users WHERE id = ?', [userId])
+    const { data: user } = await supabase.from('users').select('id, email, name, email_verified').eq('id', userId).maybeSingle()
     if (!user) return res.status(404).json({ error: 'Account not found' })
     if (user.email_verified) return res.status(400).json({ error: 'Email already verified' })
 
-    await run('UPDATE verify_tokens SET used = 1 WHERE user_id = ?', [userId])
-    const code      = generateOTP()
+    check(await supabase.from('verify_tokens').update({ used: 1 }).eq('user_id', userId))
+    const code = generateOTP()
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-    await run('INSERT INTO verify_tokens (id, user_id, code, expires_at) VALUES (?,?,?,?)',
-      [uuid(), userId, code, expiresAt])
+    check(await supabase.from('verify_tokens').insert({ id: uuid(), user_id: userId, code, expires_at: expiresAt }))
 
     const result = await sendVerificationEmail(user.email, user.name, code)
-    res.json({
-      ok: true,
-      emailSent: result.sent,
-      ...(result.sent ? {} : { demoCode: code }),
-    })
+    res.json({ ok: true, emailSent: result.sent, ...(result.sent ? {} : { demoCode: code }) })
   } catch (err) { next(err) }
 })
 
-// ── Login ─────────────────────────────────────────────────────
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
 
-    const user = await getOne('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()])
+    const { data: user } = await supabase.from('users').select('*').eq('email', email.toLowerCase().trim()).maybeSingle()
     if (!user) return res.status(401).json({ error: 'No account found with this email' })
 
     const ok = await bcrypt.compare(password, user.password)
     if (!ok) return res.status(401).json({ error: 'Incorrect password' })
 
     if (!user.email_verified) {
-      await run('UPDATE verify_tokens SET used = 1 WHERE user_id = ?', [user.id])
-      const code      = generateOTP()
+      check(await supabase.from('verify_tokens').update({ used: 1 }).eq('user_id', user.id))
+      const code = generateOTP()
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-      await run('INSERT INTO verify_tokens (id, user_id, code, expires_at) VALUES (?,?,?,?)',
-        [uuid(), user.id, code, expiresAt])
+      check(await supabase.from('verify_tokens').insert({ id: uuid(), user_id: user.id, code, expires_at: expiresAt }))
       const result = await sendVerificationEmail(user.email, user.name, code)
-      return res.status(403).json({
-        error: 'Please verify your email first. We\'ve sent a new code.',
-        needsVerify: true,
-        userId: user.id,
-        email: user.email,
-        emailSent: result.sent,
-        ...(result.sent ? {} : { demoCode: code }),
-      })
+      return res.status(403).json({ error: 'Please verify your email first.', needsVerify: true, userId: user.id, email: user.email, emailSent: result.sent, ...(result.sent ? {} : { demoCode: code }) })
     }
 
-    const token = issueToken(user)
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, tier: user.tier } })
+    res.json({ token: issueToken(user), user: { id: user.id, email: user.email, name: user.name, tier: user.tier } })
   } catch (err) { next(err) }
 })
 
-// ── Change Password ───────────────────────────────────────────
 router.post('/change-password', async (req, res, next) => {
   try {
     const header = req.headers.authorization
@@ -144,17 +106,15 @@ router.post('/change-password', async (req, res, next) => {
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' })
     if (newPassword.length < 6) return res.status(400).json({ error: 'Minimum 6 characters' })
 
-    const user = await getOne('SELECT * FROM users WHERE id = ?', [decoded.id])
+    const { data: user } = await supabase.from('users').select('*').eq('id', decoded.id).maybeSingle()
     if (!user) return res.status(404).json({ error: 'Account not found' })
-    const ok = await bcrypt.compare(currentPassword, user.password)
-    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' })
+    if (!(await bcrypt.compare(currentPassword, user.password))) return res.status(401).json({ error: 'Current password is incorrect' })
 
-    await run('UPDATE users SET password = ? WHERE id = ?', [await bcrypt.hash(newPassword, 10), user.id])
+    check(await supabase.from('users').update({ password: await bcrypt.hash(newPassword, 10) }).eq('id', user.id))
     res.json({ ok: true })
   } catch (err) { next(err) }
 })
 
-// ── Update Profile ────────────────────────────────────────────
 router.patch('/profile', async (req, res, next) => {
   try {
     const header = req.headers.authorization
@@ -162,19 +122,18 @@ router.patch('/profile', async (req, res, next) => {
     const decoded = jwt.verify(header.slice(7), process.env.JWT_SECRET)
     const { name } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'Name required' })
-    await run('UPDATE users SET name = ? WHERE id = ?', [name.trim(), decoded.id])
+    check(await supabase.from('users').update({ name: name.trim() }).eq('id', decoded.id))
     res.json({ ok: true })
   } catch (err) { next(err) }
 })
 
-// ── Me ────────────────────────────────────────────────────────
 router.get('/me', async (req, res) => {
   try {
     const header = req.headers.authorization
     if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' })
     const decoded = jwt.verify(header.slice(7), process.env.JWT_SECRET)
-    const full    = await getOne('SELECT id, email, name, tier, created_at FROM users WHERE id = ?', [decoded.id])
-    res.json(full || { id: decoded.id, email: decoded.email, name: decoded.name, tier: 'free' })
+    const { data } = await supabase.from('users').select('id, email, name, tier, created_at').eq('id', decoded.id).maybeSingle()
+    res.json(data || { id: decoded.id, email: decoded.email, name: decoded.name, tier: 'free' })
   } catch { res.status(401).json({ error: 'Invalid token' }) }
 })
 

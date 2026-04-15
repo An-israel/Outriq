@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken'
-import { getOne, run } from '../db.js'
+import supabase from '../db.js'
 
 export async function verifyToken(req, res, next) {
   const header = req.headers.authorization
@@ -13,15 +13,15 @@ export async function verifyToken(req, res, next) {
     return res.status(401).json({ error: 'Invalid token' })
   }
 
-  // Best-effort: ensure user row exists in DB (never blocks auth)
+  // Best-effort: ensure user row exists in DB
   try {
-    const exists = await getOne('SELECT id FROM users WHERE id = ?', [req.user.id])
-    if (!exists && req.user.email) {
-      await run('DELETE FROM users WHERE email = ? AND id != ?', [req.user.email, req.user.id])
-      await run(
-        'INSERT INTO users (id, email, name, password, tier, email_verified) VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING',
-        [req.user.id, req.user.email, req.user.name || 'User', 'jwt-recovery', req.user.tier || 'free', 1]
-      )
+    const { data } = await supabase.from('users').select('id').eq('id', req.user.id).maybeSingle()
+    if (!data && req.user.email) {
+      await supabase.from('users').delete().eq('email', req.user.email).neq('id', req.user.id)
+      await supabase.from('users').upsert({
+        id: req.user.id, email: req.user.email, name: req.user.name || 'User',
+        password: 'jwt-recovery', tier: req.user.tier || 'free', email_verified: 1
+      }, { onConflict: 'id' })
     }
   } catch {}
 
