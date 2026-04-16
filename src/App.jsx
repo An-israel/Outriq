@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, BarChart3, CreditCard,
   Target, Zap, Search, Bell, Settings, ChevronRight,
   Activity, LogOut, Loader, Eye, EyeOff, ArrowLeft, RefreshCw,
-  ShieldCheck
+  ShieldCheck, Menu
 } from 'lucide-react'
 import Dashboard     from './pages/Dashboard'
 import Products      from './pages/Products'
@@ -64,12 +64,14 @@ class ErrorBoundary extends Component {
 }
 
 // ── Sidebar ───────────────────────────────────────────────────
-function Sidebar({ current, onNav, user, onLogout, productCount, isAdmin }) {
+function Sidebar({ current, onNav, user, onLogout, productCount, isAdmin, open, onClose }) {
   const nav = isAdmin ? ADMIN_NAV : USER_NAV
   const sections = [...new Set(nav.map(n => n.section))]
 
   return (
-    <aside className="sidebar">
+    <>
+      {open && <div className="sidebar-overlay open" onClick={onClose} />}
+    <aside className={`sidebar${open ? ' open' : ''}`}>
       <div className="sidebar-logo">
         <div className="logo-icon">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -122,12 +124,16 @@ function Sidebar({ current, onNav, user, onLogout, productCount, isAdmin }) {
         <div className="system-status"><div className="status-dot" /><span>All systems operational</span></div>
       </div>
     </aside>
+    </>
   )
 }
 
-function TopBar({ current, user, onSettings, onNotifications, onActivity }) {
+function TopBar({ current, user, onSettings, onNotifications, onActivity, onMenuClick }) {
   return (
     <header className="topbar">
+      <button className="hamburger-btn" onClick={onMenuClick} aria-label="Menu">
+        <Menu size={20} />
+      </button>
       <div className="topbar-breadcrumb">
         <span style={{ color: 'var(--text-4)', fontSize: 12 }}>OUTRIQ</span>
         <ChevronRight size={11} style={{ color: 'var(--text-4)' }} />
@@ -480,6 +486,7 @@ export default function App() {
   const [productCount, setPC]     = useState(0)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsTab, setSettingsTab]   = useState('profile')
+  const [sidebarOpen, setSidebarOpen]   = useState(false)
 
   const isAdmin = user?.email === ADMIN_EMAIL
 
@@ -507,10 +514,12 @@ export default function App() {
     return (
       <>
         <div className="app-shell">
-          <Sidebar current={current} onNav={setCurrent} user={user} productCount={productCount} isAdmin={isAdmin}
+          <Sidebar current={current} onNav={id => { setCurrent(id); setSidebarOpen(false) }} user={user} productCount={productCount} isAdmin={isAdmin}
+            open={sidebarOpen} onClose={() => setSidebarOpen(false)}
             onLogout={() => { logout(); setAuthed(false); setScreen('landing') }} />
           <div className="main-area">
             <TopBar current={current} user={user}
+              onMenuClick={() => setSidebarOpen(v => !v)}
               onSettings={() => { setSettingsTab('profile'); setShowSettings(true) }}
               onNotifications={() => { setSettingsTab('notifications'); setShowSettings(true) }}
               onActivity={() => { setSettingsTab('activity'); setShowSettings(true) }}

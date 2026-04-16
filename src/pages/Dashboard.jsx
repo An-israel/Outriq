@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Package, Radio, Zap, Users } from 'lucide-react'
+import { TrendingUp, TrendingDown, Package, Zap } from 'lucide-react'
 import { useSignals } from '../hooks/useSignals'
 import { useActions } from '../hooks/useActions'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -144,13 +144,26 @@ function ActionRow({ action }) {
 }
 
 export default function Dashboard({ onNavigate }) {
-  const { summary }                      = useAnalytics()
-  const { signals, live }                = useSignals({ limit: 12 })
-  const { actions }                      = useActions({ limit: 8 })
-  const { products }                     = useProducts()
-  const { platforms }                    = usePlatforms()
+  const { summary }                           = useAnalytics()
+  const { signals, live, simulateSignals }    = useSignals({ limit: 12 })
+  const { actions }                           = useActions({ limit: 8 })
+  const { products }                          = useProducts()
+  const { platforms }                         = usePlatforms()
+  const [scanning, setScanning]               = useState(false)
+  const [scanned, setScanned]                 = useState(false)
 
   const stats = summary || {}
+
+  async function runFirstScan() {
+    if (!products.length) { onNavigate('products'); return }
+    setScanning(true)
+    try {
+      const pid = products.find(p => p.status === 'active')?.id || products[0].id
+      await simulateSignals(pid, 6)
+      setScanned(true)
+    } catch (e) { console.error(e) }
+    finally { setScanning(false) }
+  }
 
   return (
     <>
@@ -176,6 +189,47 @@ export default function Dashboard({ onNavigate }) {
         <MetricCard label="Actions Taken"    value={stats.totalActions || 0}     change={stats.actionsChange || '+24%'} up colorClass="green"  delay={160} />
         <MetricCard label="Leads Generated"  value={stats.totalLeads || 0}       change={stats.leadsChange || '+12%'}   up colorClass="amber"  delay={240} />
       </div>
+
+      {/* Empty state — no signals yet */}
+      {signals.length === 0 && !scanning && !scanned && (
+        <div style={{
+          background: 'rgba(207,108,79,0.07)', border: '1px solid rgba(207,108,79,0.2)',
+          borderRadius: 16, padding: '24px 28px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap',
+        }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 5 }}>
+              🎯 Run your first signal scan
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6 }}>
+              {products.length
+                ? `Scanning ${products[0]?.name} across 8 platforms for intent signals...`
+                : 'Add a product first, then scan for people looking for what you offer.'}
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={runFirstScan}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', flexShrink: 0 }}
+          >
+            <Zap size={14} />
+            {products.length ? 'Scan Now' : 'Add Product'}
+          </button>
+        </div>
+      )}
+
+      {scanning && (
+        <div style={{
+          background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)',
+          borderRadius: 16, padding: '20px 28px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', gap: 14,
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green-400)', boxShadow: '0 0 8px rgba(52,211,153,0.8)', animation: 'glow-pulse 1s ease-in-out infinite', flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: 'var(--green-400)', fontWeight: 600 }}>
+            Scanning platforms for intent signals — this takes about 15 seconds...
+          </div>
+        </div>
+      )}
 
       <div className="dashboard-grid">
         <div className="card">
