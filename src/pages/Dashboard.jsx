@@ -175,9 +175,18 @@ export default function Dashboard({ onNavigate }) {
             <strong style={{ color: 'var(--cyan-400)' }}>8 platforms</strong> — AI engine active
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="live-badge"><span className="live-dot" /> Live</div>
-          <button className="btn btn-primary btn-sm" onClick={() => onNavigate('products')}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={runFirstScan}
+            disabled={scanning}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Zap size={13} />
+            {scanning ? 'Scanning...' : 'Scan for Signals'}
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('products')}>
             <Package size={13} /> Add Product
           </button>
         </div>
