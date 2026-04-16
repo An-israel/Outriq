@@ -63,10 +63,8 @@ export async function ensureSeeded() {
     for (const ch of CHANNELS) await supabase.from('platform_channels').upsert(ch)
 
     const MODULES = [
-      { id: 'respond', name: 'Conversational Response', enabled: 1, description: 'AI replies to intent signals', color: '#8b5cf6' },
       { id: 'seo', name: 'SEO Content', enabled: 1, description: 'Generates SEO articles', color: '#22d3ee' },
       { id: 'geo', name: 'GEO Optimisation', enabled: 1, description: 'Optimises for AI search engines', color: '#10b981' },
-      { id: 'outreach', name: 'Email Outreach', enabled: 1, description: 'Personalised outreach', color: '#f59e0b' },
       { id: 'landing', name: 'Landing Pages', enabled: 1, description: 'Auto-generates landing pages', color: '#f472b6' },
     ]
     for (const m of MODULES) await supabase.from('distribution_modules').upsert(m)

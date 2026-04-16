@@ -73,6 +73,40 @@ router.post('/simulate', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ── Update signal status (new/responded/saved/dismissed) ─────
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const { status, suggested_reply } = req.body
+    const allowed = ['new', 'responded', 'saved', 'dismissed']
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' })
+
+    const updates = {}
+    if (status) updates.status = status
+    if (suggested_reply !== undefined) updates.suggested_reply = suggested_reply
+
+    check(await supabase.from('signals').update(updates).eq('id', req.params.id))
+    const { data } = await supabase.from('signals').select('*').eq('id', req.params.id).single()
+    res.json(data)
+  } catch (err) { next(err) }
+})
+
+// ── Generate suggested reply (synchronous) ───────────────────
+router.post('/:id/suggest-reply', async (req, res, next) => {
+  try {
+    const { data: signal } = await supabase.from('signals').select('*').eq('id', req.params.id).maybeSingle()
+    if (!signal) return res.status(404).json({ error: 'Not found' })
+    const { data: product } = await supabase.from('products').select('*').eq('id', signal.product_id).eq('user_id', req.user.id).maybeSingle()
+    if (!product) return res.status(404).json({ error: 'Not found' })
+
+    const { generateResponse } = await import('../services/claude.service.js')
+    const reply = await generateResponse(signal, product)
+
+    await supabase.from('signals').update({ suggested_reply: reply }).eq('id', signal.id)
+
+    res.json({ reply })
+  } catch (err) { next(err) }
+})
+
 router.post('/:id/act', async (req, res, next) => {
   try {
     const { data: signal } = await supabase.from('signals').select('*').eq('id', req.params.id).maybeSingle()

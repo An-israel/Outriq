@@ -1,17 +1,17 @@
 import { useState, useEffect, Component } from 'react'
 import {
   LayoutDashboard, Package, BarChart3, CreditCard,
-  Brain, Zap, Search, Bell, Settings, ChevronRight,
+  Target, Zap, Search, Bell, Settings, ChevronRight,
   Activity, LogOut, Loader, Eye, EyeOff, ArrowLeft, RefreshCw,
   ShieldCheck
 } from 'lucide-react'
-import Dashboard    from './pages/Dashboard'
-import Products     from './pages/Products'
-import Intelligence from './pages/Intelligence'
-import Distribution from './pages/Distribution'
-import Analytics    from './pages/Analytics'
-import Pricing      from './pages/Pricing'
-import Landing      from './pages/Landing'
+import Dashboard     from './pages/Dashboard'
+import Products      from './pages/Products'
+import Opportunities from './pages/Opportunities'
+import Distribution  from './pages/Distribution'
+import Analytics     from './pages/Analytics'
+import Pricing       from './pages/Pricing'
+import Landing       from './pages/Landing'
 import SettingsPanel from './pages/Settings'
 import { useAuth }          from './hooks/useAuth'
 import { api, setToken }    from './api/client'
@@ -28,21 +28,21 @@ const USER_NAV = [
 
 // Nav for admin — full access
 const ADMIN_NAV = [
-  { id: 'dashboard',    label: 'Dashboard',    icon: LayoutDashboard, section: 'OVERVIEW' },
-  { id: 'products',     label: 'Products',      icon: Package,         section: 'OVERVIEW' },
-  { id: 'intelligence', label: 'Intelligence',  icon: Brain,           section: 'ENGINE', badge: 'LIVE', live: true },
-  { id: 'distribution', label: 'Distribution',  icon: Zap,             section: 'ENGINE' },
-  { id: 'analytics',    label: 'Analytics',     icon: BarChart3,       section: 'REPORTS' },
-  { id: 'pricing',      label: 'Pricing',       icon: CreditCard,      section: 'REPORTS' },
+  { id: 'dashboard',      label: 'Dashboard',      icon: LayoutDashboard, section: 'OVERVIEW' },
+  { id: 'products',       label: 'Products',        icon: Package,         section: 'OVERVIEW' },
+  { id: 'opportunities',  label: 'Opportunities',   icon: Target,          section: 'ENGINE', badge: 'LIVE', live: true },
+  { id: 'distribution',   label: 'Distribution',    icon: Zap,             section: 'ENGINE' },
+  { id: 'analytics',      label: 'Analytics',       icon: BarChart3,       section: 'REPORTS' },
+  { id: 'pricing',        label: 'Pricing',         icon: CreditCard,      section: 'REPORTS' },
 ]
 
 const PAGES = {
-  dashboard: Dashboard, products: Products, intelligence: Intelligence,
+  dashboard: Dashboard, products: Products, opportunities: Opportunities,
   distribution: Distribution, analytics: Analytics, pricing: Pricing,
 }
 
 const TITLES = {
-  dashboard: 'Dashboard', products: 'Products', intelligence: 'Intelligence',
+  dashboard: 'Dashboard', products: 'Products', opportunities: 'Opportunities',
   distribution: 'Distribution', analytics: 'Analytics', pricing: 'Pricing',
 }
 

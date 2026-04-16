@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { v4 as uuid } from 'uuid'
 import supabase, { check } from '../db.js'
 import { verifyToken } from '../middleware/auth.js'
-import { generateResponse, generateSEOArticle, generateGEO, generateOutreach, generateLandingPage } from '../services/claude.service.js'
+import { generateSEOArticle, generateGEO, generateLandingPage } from '../services/claude.service.js'
 
 const router = Router()
 router.use(verifyToken)
@@ -28,24 +28,6 @@ async function incrementActions(productId) {
   const { data: p } = await supabase.from('products').select('actions_count').eq('id', productId).single()
   await supabase.from('products').update({ actions_count: (p?.actions_count || 0) + 1 }).eq('id', productId)
 }
-
-router.post('/respond', async (req, res, next) => {
-  try {
-    const { productId, signalId } = req.body
-    const product = await getProduct(productId, req.user.id)
-    if (!product) return res.status(404).json({ error: 'Product not found' })
-
-    let signal = null
-    if (signalId) { const { data } = await supabase.from('signals').select('*').eq('id', signalId).maybeSingle(); signal = data }
-    const fakeSignal = signal || { text: req.body.signalText || 'How can this product help me?', platform: 'twitter', platform_label: 'X/Twitter' }
-
-    const actionId = await createAction(productId, signalId, 'respond', fakeSignal.platform, `Response posted on ${fakeSignal.platform_label || 'Platform'}`, `AI reply to: "${fakeSignal.text?.slice(0, 60)}..."`)
-    const content = await generateResponse(fakeSignal, product)
-    const action = await finishAction(actionId, content)
-    await incrementActions(productId)
-    res.json({ action, content })
-  } catch (err) { next(err) }
-})
 
 router.post('/seo', async (req, res, next) => {
   try {
@@ -74,20 +56,6 @@ router.post('/geo', async (req, res, next) => {
     const action = await finishAction(actionId, JSON.stringify(geoData, null, 2))
     await incrementActions(productId)
     res.json({ action, ...geoData })
-  } catch (err) { next(err) }
-})
-
-router.post('/outreach', async (req, res, next) => {
-  try {
-    const { productId, prospectContext } = req.body
-    const product = await getProduct(productId, req.user.id)
-    if (!product) return res.status(404).json({ error: 'Product not found' })
-
-    const actionId = await createAction(productId, null, 'outreach', 'email', `Email outreach — ${product.name}`, `Outreach: ${prospectContext || 'general'}`)
-    const content = await generateOutreach(product, prospectContext)
-    const action = await finishAction(actionId, content)
-    await incrementActions(productId)
-    res.json({ action, content })
   } catch (err) { next(err) }
 })
 
