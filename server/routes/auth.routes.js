@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { v4 as uuid } from 'uuid'
 import supabase, { check } from '../db.js'
-import { sendVerificationEmail } from '../services/email.service.js'
+import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email.service.js'
 
 const router = Router()
 
@@ -94,6 +94,52 @@ router.post('/login', async (req, res, next) => {
     }
 
     res.json({ token: issueToken(user), user: { id: user.id, email: user.email, name: user.name, tier: user.tier } })
+  } catch (err) { next(err) }
+})
+
+// ── Forgot password — send reset code ─────────────────────────
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ error: 'Email is required' })
+
+    const clean = email.toLowerCase().trim()
+    const { data: user } = await supabase.from('users').select('id, email, name').eq('email', clean).maybeSingle()
+    if (!user) return res.status(404).json({ error: 'No account found with this email' })
+
+    // Invalidate old reset codes
+    await supabase.from('verify_tokens').update({ used: 1 }).eq('user_id', user.id)
+
+    const code = generateOTP()
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    check(await supabase.from('verify_tokens').insert({ id: uuid(), user_id: user.id, code, expires_at: expiresAt }))
+
+    const result = await sendPasswordResetEmail(user.email, user.name, code)
+    res.json({ ok: true, userId: user.id, email: user.email, emailSent: result.sent, ...(result.sent ? {} : { demoCode: code }) })
+  } catch (err) { next(err) }
+})
+
+// ── Reset password — verify code + set new password ──────────
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { userId, code, newPassword } = req.body
+    if (!userId || !code || !newPassword) return res.status(400).json({ error: 'userId, code and newPassword are required' })
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+    const { data: token } = await supabase.from('verify_tokens')
+      .select('*').eq('user_id', userId).eq('code', code.trim()).eq('used', 0)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (!token) return res.status(400).json({ error: 'Invalid or expired code.' })
+
+    // Mark token used + update password
+    check(await supabase.from('verify_tokens').update({ used: 1 }).eq('id', token.id))
+    const hash = await bcrypt.hash(newPassword, 10)
+    check(await supabase.from('users').update({ password: hash, email_verified: 1 }).eq('id', userId))
+
+    // Auto-login after reset
+    const { data: user } = await supabase.from('users').select('id, email, name, tier').eq('id', userId).single()
+    res.json({ token: issueToken(user), user })
   } catch (err) { next(err) }
 })
 

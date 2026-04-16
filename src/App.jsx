@@ -178,7 +178,7 @@ const linkBtnSt= { background: 'none', border: 'none', cursor: 'pointer', color:
 const backBtnSt= { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }
 
 // ── Login ─────────────────────────────────────────────────────
-function LoginScreen({ onAuth, onGoRegister, onBack }) {
+function LoginScreen({ onAuth, onGoRegister, onBack, onForgot }) {
   const [email, setEmail]     = useState('')
   const [pw, setPw]           = useState('')
   const [show, setShow]       = useState(false)
@@ -220,7 +220,10 @@ function LoginScreen({ onAuth, onGoRegister, onBack }) {
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
       </form>
-      <div style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--text-3)' }}>
+      <div style={{ textAlign: 'center', marginTop: 14 }}>
+        <button onClick={onForgot} style={linkBtnSt}>Forgot password?</button>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: 12, fontSize: 13, color: 'var(--text-3)' }}>
         No account? <button onClick={onGoRegister} style={linkBtnSt}>Create one</button>
       </div>
       <div style={{ textAlign: 'center', marginTop: 8 }}>
@@ -353,6 +356,118 @@ function VerifyScreen({ userId, email, demoCode: initialCode, onVerified, onBack
   )
 }
 
+// ── Forgot Password ──────────────────────────────────────────
+function ForgotPasswordScreen({ onBack, onAuth }) {
+  const [email, setEmail]     = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+  const [resetData, setRD]    = useState(null)
+
+  if (resetData) return <ResetPasswordScreen {...resetData} onAuth={onAuth} onBack={() => setRD(null)} />
+
+  async function submit(e) {
+    e.preventDefault(); setLoading(true); setError('')
+    try {
+      const data = await api.post('/auth/forgot-password', { email: email.trim() })
+      setRD({ userId: data.userId, email: data.email, demoCode: data.demoCode })
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <AuthCard>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4, letterSpacing: -0.5 }}>Forgot password?</h1>
+      <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 24, lineHeight: 1.6 }}>Enter your email and we'll send you a reset code</p>
+      {error && <div style={errSt}>{error}</div>}
+      <form onSubmit={submit}>
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelSt}>Email</label>
+          <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoFocus />
+        </div>
+        <button type="submit" className="btn btn-primary w-full" disabled={loading} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap: 8, fontSize: 14, padding: '11px 20px' }}>
+          {loading && <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />}
+          {loading ? 'Sending...' : 'Send Reset Code'}
+        </button>
+      </form>
+      <div style={{ textAlign: 'center', marginTop: 16 }}>
+        <button onClick={onBack} style={backBtnSt}><ArrowLeft size={11} /> Back to login</button>
+      </div>
+    </AuthCard>
+  )
+}
+
+// ── Reset Password ───────────────────────────────────────────
+function ResetPasswordScreen({ userId, email, demoCode: initialCode, onAuth, onBack }) {
+  const [code, setCode]     = useState('')
+  const [pw, setPw]         = useState('')
+  const [show, setShow]     = useState(false)
+  const [loading, setL]     = useState(false)
+  const [error, setError]   = useState('')
+  const [liveCode, setLC]   = useState(initialCode)
+
+  async function submit(e) {
+    e.preventDefault(); setL(true); setError('')
+    try {
+      const data = await api.post('/auth/reset-password', { userId, code: code.trim(), newPassword: pw })
+      setToken(data.token); onAuth()
+    } catch (err) { setError(err.message) }
+    finally { setL(false) }
+  }
+
+  async function resend() {
+    setError('')
+    try {
+      const data = await api.post('/auth/forgot-password', { email })
+      if (data.demoCode) setLC(data.demoCode)
+    } catch (err) { setError(err.message) }
+  }
+
+  return (
+    <AuthCard>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ fontSize: 36, marginBottom: 10 }}>🔑</div>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-1)', marginBottom: 6 }}>Reset your password</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6 }}>
+          We sent a 6-digit code to <strong style={{ color: 'var(--text-2)' }}>{email}</strong>
+        </p>
+      </div>
+
+      {liveCode && (
+        <div style={{ background: 'rgba(207,108,79,0.1)', border: '1px solid rgba(207,108,79,0.2)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, textAlign: 'center' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--accent)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '1px' }}>Your reset code</div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-1)', letterSpacing: 8, fontFamily: 'monospace' }}>{liveCode}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 4 }}>Expires in 15 minutes</div>
+        </div>
+      )}
+
+      {error && <div style={errSt}>{error}</div>}
+
+      <form onSubmit={submit}>
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelSt}>6-digit code</label>
+          <input className="form-input" value={code} onChange={e => setCode(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="000000" maxLength={6} required autoFocus style={{ textAlign: 'center', fontSize: 22, letterSpacing: 10, fontFamily: 'monospace' }} />
+        </div>
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelSt}>New password <span style={{ color: 'var(--text-4)', fontWeight: 400 }}>(min 6 chars)</span></label>
+          <div style={{ position: 'relative' }}>
+            <input className="form-input" type={show ? 'text' : 'password'} value={pw} onChange={e => setPw(e.target.value)} placeholder="Enter new password" required style={{ paddingRight: 44 }} />
+            <button type="button" onClick={() => setShow(v => !v)} style={eyeBtnSt}>{show ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+          </div>
+        </div>
+        <button type="submit" className="btn btn-primary w-full" disabled={loading || code.length < 6 || pw.length < 6} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap: 8, fontSize: 14, padding: '11px 20px' }}>
+          {loading && <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />}
+          {loading ? 'Resetting...' : 'Reset Password & Sign In'}
+        </button>
+      </form>
+      <div style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--text-3)' }}>
+        Didn't get it?{' '}
+        <button onClick={resend} style={linkBtnSt}>Resend code</button>
+      </div>
+      {onBack && <div style={{ textAlign: 'center', marginTop: 8 }}><button onClick={onBack} style={backBtnSt}><ArrowLeft size={11} /> Back</button></div>}
+    </AuthCard>
+  )
+}
+
 const errSt = { background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.18)', borderRadius: 8, padding: '9px 12px', color: 'var(--red-400)', fontSize: 12.5, marginBottom: 16 }
 
 // ── App root ──────────────────────────────────────────────────
@@ -425,5 +540,8 @@ export default function App() {
   if (screen === 'verify' && verifyData) return (
     <VerifyScreen {...verifyData} onVerified={() => setAuthed(true)} onBack={() => setScreen('register')} />
   )
-  return <LoginScreen onAuth={() => setAuthed(true)} onGoRegister={() => setScreen('register')} onBack={() => setScreen('landing')} />
+  if (screen === 'forgot') return (
+    <ForgotPasswordScreen onAuth={() => setAuthed(true)} onBack={() => setScreen('login')} />
+  )
+  return <LoginScreen onAuth={() => setAuthed(true)} onGoRegister={() => setScreen('register')} onBack={() => setScreen('landing')} onForgot={() => setScreen('forgot')} />
 }
