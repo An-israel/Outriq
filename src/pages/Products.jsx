@@ -9,7 +9,6 @@ const CATEGORIES = [
   'Travel & Hospitality', 'Business Services', 'Marketing & Advertising',
   'HR & Recruitment', 'Insurance', 'Energy & Utilities', 'Non-profit / NGO', 'Other',
 ]
-const LOCATIONS  = ['Lagos, Nigeria', 'Abuja, Nigeria', 'Port Harcourt, Nigeria', 'Ibadan, Nigeria', 'Nigeria (Remote/Nationwide)', 'Other']
 
 function PIPTag({ text }) {
   return <span className="pip-tag">{text}</span>
@@ -220,10 +219,8 @@ function AddProductModal({ onClose, onCreate }) {
             </div>
             <div className="form-group">
               <label className="form-label">Location / Service Area <span>*</span></label>
-              <select className="form-select" value={form.location} onChange={e => set('location', e.target.value)}>
-                <option value="">Select location...</option>
-                {LOCATIONS.map(l => <option key={l}>{l}</option>)}
-              </select>
+              <input className="form-input" placeholder="e.g. New York, USA  or  London, UK  or  Worldwide" value={form.location} onChange={e => set('location', e.target.value)} />
+              <div className="form-hint">City, country, region, or "Worldwide" / "Remote"</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
